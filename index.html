@@ -39,6 +39,7 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.45;min-height:100%}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -177,6 +178,10 @@ button.remind{cursor:pointer}
 .sub{font-family:var(--font-display);font-size:15px;margin:14px 0 8px}
 textarea.summary{min-height:300px;font-family:var(--font-body);font-size:13.5px}
 .replist{font-size:13px;color:var(--muted);margin:0 0 10px;padding-left:18px}
+.chipsx{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.chipx{display:inline-flex;align-items:center;gap:4px;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:3px 4px 3px 10px;font-size:13px;font-weight:600}
+.chipx button{border:0;background:transparent;color:inherit;font-size:15px;line-height:1;padding:0 6px;border-radius:99px}
+.chipx button:hover{background:rgba(0,0,0,.08)}
 /* Modal */
 .overlay{position:fixed;inset:0;background:rgba(10,14,22,.45);display:none;align-items:flex-start;justify-content:center;padding:6vh 12px;z-index:20;overflow-y:auto}
 .overlay.show{display:flex}
@@ -478,6 +483,7 @@ function renderProjects(){
     const meta=[p.client,p.manager?'GP: '+p.manager:''].filter(Boolean).map(esc).join(' · ');
     return '<div class="pcard"><div class="row"><h3>'+esc(p.name)+'</h3></div>'+
       (meta?'<div class="pmeta">'+meta+'</div>':'')+
+      (Array.isArray(p.team)&&p.team.length?'<div class="pmeta">Equipe: '+esc(p.team.slice(0,3).join(", "))+(p.team.length>3?' +'+(p.team.length-3):'')+'</div>':'')+
       '<div class="row">'+(u?'<span class="pill '+esc(u.status||"none")+'">'+esc(STATUS[u.status]||"Sem status")+'</span>':'<span class="pill none">Sem atualização</span>')+
         (u&&u.phase?'<span class="phase">'+esc(u.phase)+'</span>':'')+'</div>'+
       (pr?'<div class="prog"><b>'+pr.value+'%</b><div class="bar"><i style="width:'+Math.max(0,Math.min(100,pr.value))+'%"></i></div>'+(pr.delta?'<span class="delta '+(pr.delta>0?'up':'down')+'">'+(pr.delta>0?'+':'')+pr.delta+'%</span>':'')+'</div>':'')+
@@ -649,8 +655,10 @@ function prefillNext(pid,date){
   const st=date||today(), endD=iso(addDays(parse(st),10));
   return S.tasks.filter(t=>t.project===pid&&!t.done&&(!t.day||(t.day>=st&&t.day<=endD))).sort((a,b)=>(a.day||"9").localeCompare(b.day||"9")).slice(0,8).map(t=>"• "+t.title+(t.day?" ("+brShort(t.day)+")":"")).join("\n");
 }
-function riskPeopleList(id){
-  const names=[...new Set([...S.team,...S.risks.map(r=>r.owner)].filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+function riskPeopleList(id,pid){
+  const p=S.projects.find(x=>x.id===pid);
+  const pt=p&&Array.isArray(p.team)?p.team.filter(Boolean):[];
+  const names=pt.length?[...new Set(pt)].sort((a,b)=>a.localeCompare(b,"pt-BR")):[...new Set([...S.team,...S.risks.map(r=>r.owner)].filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
   return '<datalist id="'+id+'">'+names.map(p=>'<option value="'+esc(p)+'">').join("")+'</datalist>';
 }
 function riskBlock(boxId,pid){
@@ -664,7 +672,7 @@ function riskBlock(boxId,pid){
       return '<div class="risk'+(ok?' ok':'')+'"><div class="rt">'+esc(r.text)+'<div class="rm">'+(r.owner?'Resp.: '+esc(r.owner):'Sem responsável')+(r.due?' · <span class="'+(!ok&&r.due<td?'late':'')+'">Prazo '+br(r.due)+'</span>':'')+(ok&&r.resolvedAt?' · resolvido em '+br(r.resolvedAt):'')+'</div></div>'+
         (S.canWrite?'<button type="button" class="btn small" data-rtog="'+esc(r.id)+'">'+(ok?'Reabrir':'Resolver')+'</button><button type="button" class="btn small" data-rdel="'+esc(r.id)+'" aria-label="Excluir risco">×</button>':'')+'</div>';
     }).join(""):'<p class="hint">Nenhum risco cadastrado.</p>')+'</div>'+
-    (S.canWrite?'<div class="riskadd"><input type="text" id="'+boxId+'-t" placeholder="Novo risco ou impedimento" aria-label="Novo risco"><input type="text" id="'+boxId+'-o" list="dl-team-r" placeholder="Responsável (digite o nome)" aria-label="Responsável">'+riskPeopleList("dl-team-r")+'<input type="date" id="'+boxId+'-d" aria-label="Prazo"><button type="button" class="btn" id="'+boxId+'-a">Adicionar</button></div>':'');
+    (S.canWrite?'<div class="riskadd"><input type="text" id="'+boxId+'-t" placeholder="Novo risco ou impedimento" aria-label="Novo risco"><input type="text" id="'+boxId+'-o" list="dl-team-r" placeholder="Responsável (digite o nome)" aria-label="Responsável">'+riskPeopleList("dl-team-r",pid)+'<input type="date" id="'+boxId+'-d" aria-label="Prazo"><button type="button" class="btn" id="'+boxId+'-a">Adicionar</button></div>':'');
     if(!S.canWrite)return;
     box.querySelectorAll("[data-rtog]").forEach(b=>b.onclick=async()=>{const r=S.risks.find(x=>x.id===b.dataset.rtog);if(!r)return;const ok=r.status==="resolvido";await write(()=>col("risks").doc(r.id).update({status:ok?"aberto":"resolvido",resolvedAt:ok?"":today()}))});
     box.querySelectorAll("[data-rdel]").forEach(b=>{let c=false;b.onclick=async()=>{if(!c){c=true;b.textContent="Excluir?";return}await write(()=>col("risks").doc(b.dataset.rdel).delete())}});
@@ -750,19 +758,29 @@ function openProject(pid){
     '<div class="field"><label for="p-manager">Gerente do projeto</label><input type="text" id="p-manager" list="dl-team-p" value="'+esc(p.manager||"")+'"'+ro+'>'+teamList("dl-team-p")+'</div></div>'+
     '<div class="two"><div class="field"><label for="p-start">Início</label><input type="date" id="p-start" value="'+esc(p.start||"")+'"'+ro+'></div>'+
     '<div class="field"><label for="p-golive">Go-live previsto</label><input type="date" id="p-golive" value="'+esc(p.goLive||"")+'"'+ro+'></div></div>'+
+    '<div class="field"><label for="p-tm">Equipe do projeto</label><div class="chipsx" id="p-team"></div>'+
+      (S.canWrite?'<div class="inline"><input type="text" id="p-tm" placeholder="Nome de quem trabalha no projeto" aria-label="Adicionar pessoa à equipe do projeto"><button type="button" class="btn" id="p-tm-add">Adicionar</button></div>':'')+
+      '<span class="hint">Esses nomes aparecem como sugestão no responsável dos riscos deste projeto.</span></div>'+
     '<div class="field" id="p-reason-f" hidden><label for="p-reason">Motivo da mudança do go-live</label><input type="text" id="p-reason" placeholder="Ex.: atraso na homologação do cliente"'+ro+'></div>'+
     (p.goLiveBase?'<p class="hint">Go-live do plano original: '+br(p.goLiveBase)+'</p>':'')+
     (reps.length?'<div class="sub">Replanejamentos</div><ul class="replist">'+reps.map(r=>'<li>'+br(r.at)+': '+br(r.from)+' → '+br(r.to)+(r.reason?' · '+esc(r.reason):'')+'</li>').join("")+'</ul>':'')+
     '<div class="err" id="p-err"></div>'+
     '<div class="actions"><button type="button" class="btn" id="p-cancel">'+(S.canWrite?'Cancelar':'Fechar')+'</button>'+(S.canWrite?'<button type="submit" class="btn primary">Salvar</button>':'')+'</div></form>');
   $("p-cancel").onclick=closeModal;
+  let team=Array.isArray(p.team)?p.team.filter(x=>typeof x==="string"&&x):[];
+  const drawTeam=()=>{$("p-team").innerHTML=team.length?team.map((n,i)=>'<span class="chipx">'+esc(n)+(S.canWrite?'<button type="button" data-tmrm="'+i+'" aria-label="Remover '+esc(n)+'">×</button>':'')+'</span>').join(""):'<span class="hint">Ninguém cadastrado ainda.</span>';
+    $("p-team").querySelectorAll("[data-tmrm]").forEach(b=>b.onclick=()=>{team=team.filter((_,i)=>i!==+b.dataset.tmrm);drawTeam()})};
+  drawTeam();
+  if(S.canWrite){const addT=()=>{const inp=$("p-tm");inp.value.split(/[,;]/).map(x=>x.trim()).filter(Boolean).forEach(n=>{if(!team.some(t=>t.toLowerCase()===n.toLowerCase()))team.push(n)});inp.value="";drawTeam();inp.focus()};
+    $("p-tm-add").onclick=addT;$("p-tm").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();addT()}}}
   const gl=$("p-golive");
   gl.oninput=()=>{$("p-reason-f").hidden=!(p.goLive&&gl.value&&gl.value!==p.goLive)};
   if(!S.canWrite)return;
   $("pform").onsubmit=async e=>{
     e.preventDefault();
     const name=$("p-name").value.trim();if(!name){$("p-err").textContent="O nome é obrigatório.";return}
-    const data={name,client:$("p-client").value.trim(),manager:$("p-manager").value.trim(),start:$("p-start").value||"",goLive:gl.value||""};
+    const pend=$("p-tm")&&$("p-tm").value.trim();if(pend)pend.split(/[,;]/).map(x=>x.trim()).filter(Boolean).forEach(n=>{if(!team.some(t=>t.toLowerCase()===n.toLowerCase()))team.push(n)});
+    const data={name,client:$("p-client").value.trim(),manager:$("p-manager").value.trim(),start:$("p-start").value||"",goLive:gl.value||"",team};
     if(data.goLive&&!p.goLiveBase)data.goLiveBase=data.goLive;
     if(p.goLive&&data.goLive&&data.goLive!==p.goLive)data.replans=[...reps,{at:today(),from:p.goLive,to:data.goLive,reason:$("p-reason").value.trim()}];
     if(await write(()=>col("projects").doc(pid).update(data)))closeModal();
