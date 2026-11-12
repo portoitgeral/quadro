@@ -649,6 +649,10 @@ function prefillNext(pid,date){
   const st=date||today(), endD=iso(addDays(parse(st),10));
   return S.tasks.filter(t=>t.project===pid&&!t.done&&(!t.day||(t.day>=st&&t.day<=endD))).sort((a,b)=>(a.day||"9").localeCompare(b.day||"9")).slice(0,8).map(t=>"• "+t.title+(t.day?" ("+brShort(t.day)+")":"")).join("\n");
 }
+function riskPeopleList(id){
+  const names=[...new Set([...S.team,...S.risks.map(r=>r.owner)].filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+  return '<datalist id="'+id+'">'+names.map(p=>'<option value="'+esc(p)+'">').join("")+'</datalist>';
+}
 function riskBlock(boxId,pid){
   const box=$(boxId);if(!box)return;
   const td=today();
@@ -660,7 +664,7 @@ function riskBlock(boxId,pid){
       return '<div class="risk'+(ok?' ok':'')+'"><div class="rt">'+esc(r.text)+'<div class="rm">'+(r.owner?'Resp.: '+esc(r.owner):'Sem responsável')+(r.due?' · <span class="'+(!ok&&r.due<td?'late':'')+'">Prazo '+br(r.due)+'</span>':'')+(ok&&r.resolvedAt?' · resolvido em '+br(r.resolvedAt):'')+'</div></div>'+
         (S.canWrite?'<button type="button" class="btn small" data-rtog="'+esc(r.id)+'">'+(ok?'Reabrir':'Resolver')+'</button><button type="button" class="btn small" data-rdel="'+esc(r.id)+'" aria-label="Excluir risco">×</button>':'')+'</div>';
     }).join(""):'<p class="hint">Nenhum risco cadastrado.</p>')+'</div>'+
-    (S.canWrite?'<div class="riskadd"><input type="text" id="'+boxId+'-t" placeholder="Novo risco ou impedimento" aria-label="Novo risco"><input type="text" id="'+boxId+'-o" list="dl-team-r" placeholder="Responsável" aria-label="Responsável">'+teamList("dl-team-r")+'<input type="date" id="'+boxId+'-d" aria-label="Prazo"><button type="button" class="btn" id="'+boxId+'-a">Adicionar</button></div>':'');
+    (S.canWrite?'<div class="riskadd"><input type="text" id="'+boxId+'-t" placeholder="Novo risco ou impedimento" aria-label="Novo risco"><input type="text" id="'+boxId+'-o" list="dl-team-r" placeholder="Responsável (digite o nome)" aria-label="Responsável">'+riskPeopleList("dl-team-r")+'<input type="date" id="'+boxId+'-d" aria-label="Prazo"><button type="button" class="btn" id="'+boxId+'-a">Adicionar</button></div>':'');
     if(!S.canWrite)return;
     box.querySelectorAll("[data-rtog]").forEach(b=>b.onclick=async()=>{const r=S.risks.find(x=>x.id===b.dataset.rtog);if(!r)return;const ok=r.status==="resolvido";await write(()=>col("risks").doc(r.id).update({status:ok?"aberto":"resolvido",resolvedAt:ok?"":today()}))});
     box.querySelectorAll("[data-rdel]").forEach(b=>{let c=false;b.onclick=async()=>{if(!c){c=true;b.textContent="Excluir?";return}await write(()=>col("risks").doc(b.dataset.rdel).delete())}});
