@@ -182,6 +182,22 @@ textarea.summary{min-height:300px;font-family:var(--font-body);font-size:13.5px}
 .chipx{display:inline-flex;align-items:center;gap:4px;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:3px 4px 3px 10px;font-size:13px;font-weight:600}
 .chipx button{border:0;background:transparent;color:inherit;font-size:15px;line-height:1;padding:0 6px;border-radius:99px}
 .chipx button:hover{background:rgba(0,0,0,.08)}
+.bell-wrap{position:relative}
+.icon-btn.bell{display:flex;align-items:center;justify-content:center;padding:6px 9px;position:relative}
+.badge{position:absolute;top:-6px;right:-6px;min-width:19px;height:19px;border-radius:99px;background:#E5484D;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 5px;border:2px solid var(--header)}
+.bell-panel{position:absolute;right:0;top:calc(100% + 10px);width:min(370px,calc(100vw - 24px));max-height:70vh;overflow-y:auto;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 40px rgba(0,20,50,.25);z-index:15}
+.bp-head{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface)}
+.bp-head h3{font-size:16px;flex:1}
+.bp-sec{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:10px 14px 4px}
+.nt{display:flex;gap:10px;padding:10px 14px;border:0;background:transparent;width:100%;text-align:left;border-bottom:1px solid var(--line);color:var(--ink)}
+.nt:hover{background:var(--col)}
+.nt .dotn{width:8px;height:8px;border-radius:50%;background:transparent;margin-top:6px;flex:none}
+.nt.unread{background:var(--accent-soft)}
+.nt.unread .dotn{background:var(--accent)}
+.nt .nx{flex:1;min-width:0;font-size:14px;overflow-wrap:anywhere}
+.nt .nw{font-size:12px;color:var(--muted);margin-top:2px}
+.nt.alert .dotn{background:var(--hi)}
+.bp-empty{padding:18px 14px;color:var(--muted);font-size:14px}
 /* Modal */
 .overlay{position:fixed;inset:0;background:rgba(10,14,22,.45);display:none;align-items:flex-start;justify-content:center;padding:6vh 12px;z-index:20;overflow-y:auto}
 .overlay.show{display:flex}
@@ -216,7 +232,8 @@ textarea.summary{min-height:300px;font-family:var(--font-body);font-size:13.5px}
 @media (max-width:520px){
   .brand img{height:26px}
   .brand .sep,.brand .area{display:none}
-  .tabs{margin-left:0;width:100%}
+  .tabs{margin-left:0;width:100%;order:3}
+  .brand{margin-right:auto}
   .tab{flex:1}
   .weeknav h2{min-width:0;font-size:16px}
   .column{flex-basis:84vw}
@@ -235,6 +252,7 @@ textarea.summary{min-height:300px;font-family:var(--font-body);font-size:13.5px}
       <button class="tab" role="tab" id="tab-quadro" aria-selected="true">Quadro</button>
       <button class="tab" role="tab" id="tab-atualizacoes" aria-selected="false">Atualizações semanais</button>
     </div>
+    <div class="bell-wrap"><button class="icon-btn bell" id="btn-bell" aria-label="Notificações" aria-expanded="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3h-16a4 4 0 0 0 2-3v-3a7 7 0 0 1 4-6"/><path d="M9 17v1a3 3 0 0 0 6 0v-1"/></svg><span class="badge" id="bell-badge" hidden>0</span></button><div class="bell-panel" id="bell-panel" hidden></div></div>
     <button class="icon-btn" id="btn-settings" title="Equipe e projetos">Equipe e projetos</button>
     <button class="icon-btn" id="btn-logout" title="Sair da conta" hidden>Sair</button>
   </div>
@@ -319,7 +337,7 @@ const STATUS={ok:"No prazo",warn:"Atenção",bad:"Atrasado",done:"Concluído"};
 const PRIO={alta:"Alta",media:"Média",baixa:"Baixa"};
 const PHASES=["Planejamento","Execução","Homologação","Go-live"];
 
-const S={tasks:[],projects:[],updates:[],risks:[],team:[],week:monday(new Date()),days:[0,1,2,3,4],backlog:true,
+const S={tasks:[],projects:[],updates:[],risks:[],notifs:[],team:[],week:monday(new Date()),days:[0,1,2,3,4],backlog:true,
   fPerson:"",fProject:"",hProject:"",me:"",mine:true,tab:"quadro",canWrite:true,db:null,uid:null,loaded:false};
 
 /* ---------- utilidades ---------- */
@@ -514,8 +532,66 @@ function renderHistory(){
       (u.author?'<span class="a">'+esc(u.author)+'</span>':'')+'</div>'+(dl?'<dl>'+dl+'</dl>':'')+'</div>';
   }).join("");
 }
+/* ---------- notificações ---------- */
+function notify(to,text,ref){
+  to=(to||"").trim();
+  if(!S.db||!to||to===S.me)return;
+  try{col("notifs").add({to,text,ref:ref||{},by:S.me||"",at:Date.now(),read:false}).catch(()=>{})}catch(e){}
+}
+function ago(ms){const m=Math.round((Date.now()-ms)/60000);if(m<1)return "agora";if(m<60)return "há "+m+" min";const h=Math.round(m/60);if(h<24)return "há "+h+"h";const d=Math.round(h/24);return d===1?"ontem":"há "+d+" dias"}
+function myAlerts(){
+  if(!S.me||!S.loaded)return [];
+  const td=today(),tm=iso(addDays(new Date(),1)),out=[];
+  S.tasks.filter(t=>t.owner===S.me&&!t.done).forEach(t=>{
+    if(t.due&&t.due<td)out.push({key:"tl:"+t.id+":"+t.due,text:"Tarefa com prazo vencido: "+t.title+" ("+br(t.due)+")",ref:{type:"task",id:t.id}});
+    else if(t.due&&t.due<=tm)out.push({key:"td:"+t.id+":"+t.due,text:"Prazo "+(t.due===td?"hoje":"amanhã")+": "+t.title,ref:{type:"task",id:t.id}});
+  });
+  S.risks.filter(r=>r.owner===S.me&&r.status!=="resolvido"&&r.due&&r.due<=tm).forEach(r=>{
+    out.push({key:"rk:"+r.id+":"+r.due,text:(r.due<td?"Risco com prazo vencido":"Risco vence "+(r.due===td?"hoje":"amanhã"))+" ("+projName(r.projectId)+"): "+r.text,ref:{type:"risk",id:r.projectId}});
+  });
+  const pend=pendingThisWeek().filter(p=>!p.manager||p.manager===S.me);
+  if(pend.length)out.push({key:"wk:"+iso(monday(new Date()))+":"+pend.length,text:"Atualização semanal pendente: "+pend.map(p=>p.name).slice(0,3).join(", ")+(pend.length>3?" e mais "+(pend.length-3):""),ref:{type:"updates"}});
+  return out;
+}
+function seenAlerts(){try{return JSON.parse(localStorage.getItem("quadro.seen")||"[]")}catch(e){return []}}
+function setSeen(keys){try{localStorage.setItem("quadro.seen",JSON.stringify(keys.slice(-200)))}catch(e){}}
+function myNotifs(){return S.notifs.filter(n=>n.to===S.me).sort((a,b)=>(b.at||0)-(a.at||0)).slice(0,40)}
+function renderBell(){
+  const seen=seenAlerts();
+  const n=S.me?myNotifs().filter(x=>!x.read).length+myAlerts().filter(a=>!seen.includes(a.key)).length:0;
+  const b=$("bell-badge");b.hidden=!n;b.textContent=n>9?"9+":n;
+  if(!$("bell-panel").hidden)drawBellPanel();
+}
+function drawBellPanel(){
+  const pnl=$("bell-panel");
+  if(!S.me){pnl.innerHTML='<div class="bp-head"><h3>Notificações</h3></div><div class="bp-empty">Escolha seu nome em “Quem é você?”, na aba Quadro, para receber notificações.</div>';return}
+  const al=myAlerts(),ns=myNotifs();
+  let h='<div class="bp-head"><h3>Notificações</h3>'+(ns.some(x=>!x.read)?'<button class="btn small" id="bp-readall">Marcar como lidas</button>':'')+'</div>';
+  if(al.length)h+='<div class="bp-sec">Atenção</div>'+al.map((a,i)=>'<button class="nt alert" data-al="'+i+'"><span class="dotn"></span><span class="nx">'+esc(a.text)+'</span></button>').join("");
+  h+='<div class="bp-sec">Recentes</div>'+(ns.length?ns.map(x=>'<button class="nt'+(x.read?'':' unread')+'" data-nt="'+esc(x.id)+'"><span class="dotn"></span><span class="nx">'+esc(x.text)+'<div class="nw">'+(x.by?esc(x.by)+' · ':'')+ago(x.at||Date.now())+'</div></span></button>').join(""):'<div class="bp-empty">Nada novo por aqui.</div>');
+  pnl.innerHTML=h;
+  const go=ref=>{closeBell();if(!ref)return;
+    if(ref.type==="task"){setTab("quadro");openTask(ref.id)}
+    else if(ref.type==="risk"){setTab("atualizacoes");openRiskModal(ref.id)}
+    else if(ref.type==="update"||ref.type==="updates"){setTab("atualizacoes")}};
+  pnl.querySelectorAll("[data-al]").forEach(b=>b.onclick=()=>go(al[+b.dataset.al].ref));
+  pnl.querySelectorAll("[data-nt]").forEach(b=>b.onclick=()=>{const x=S.notifs.find(n=>n.id===b.dataset.nt);if(!x)return;if(!x.read)col("notifs").doc(x.id).update({read:true}).catch(()=>{});go(x.ref)});
+  const ra=$("bp-readall");if(ra)ra.onclick=()=>{myNotifs().filter(x=>!x.read).forEach(x=>col("notifs").doc(x.id).update({read:true}).catch(()=>{}))};
+}
+function openBell(){
+  $("bell-panel").hidden=false;$("btn-bell").setAttribute("aria-expanded","true");drawBellPanel();
+  const seen=seenAlerts();setSeen([...seen,...myAlerts().map(a=>a.key).filter(k=>!seen.includes(k))]);
+  const old=Date.now()-30*86400000;
+  myNotifs().filter(x=>x.read&&(x.at||0)<old).slice(0,15).forEach(x=>col("notifs").doc(x.id).delete().catch(()=>{}));
+  renderBell();
+}
+function closeBell(){$("bell-panel").hidden=true;$("btn-bell").setAttribute("aria-expanded","false");renderBell()}
+$("btn-bell").onclick=e=>{e.stopPropagation();$("bell-panel").hidden?openBell():closeBell()};
+document.addEventListener("click",e=>{if(!$("bell-panel").hidden&&!e.target.closest(".bell-wrap"))closeBell()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("bell-panel").hidden)closeBell()});
+
 function renderAll(){
-  renderDayChips();renderFilters();renderBoard();renderProjects();renderHistory();renderReminder();
+  renderDayChips();renderFilters();renderBoard();renderProjects();renderHistory();renderReminder();renderBell();
   $("new-update").hidden=!S.canWrite;
   if(S.riskRefresh)S.riskRefresh();
 }
@@ -545,7 +621,7 @@ $("daychips").addEventListener("click",e=>{
   savePrefs();renderDayChips();renderBoard();
 });
 $("f-person").onchange=e=>{S.fPerson=e.target.value;renderBoard()};
-$("me").onchange=e=>{S.me=e.target.value;if(S.me)S.mine=true;savePrefs();renderFilters();renderBoard();if(!S.me)banner("Escolha seu nome em “Quem é você?” para ver só as suas tarefas.")};
+$("me").onchange=e=>{S.me=e.target.value;if(S.me)S.mine=true;savePrefs();renderFilters();renderBoard();renderBell();if(!S.me)banner("Escolha seu nome em “Quem é você?” para ver só as suas tarefas.")};
 $("v-mine").onclick=()=>{S.mine=true;savePrefs();renderFilters();renderBoard();if(!S.me){banner("Escolha seu nome em “Quem é você?” para ver só as suas tarefas.");$("me").focus()}};
 $("v-team").onclick=()=>{S.mine=false;savePrefs();renderFilters();renderBoard()};
 $("f-project").onchange=e=>{S.fProject=e.target.value;renderBoard()};
@@ -559,7 +635,9 @@ board.addEventListener("keydown",async e=>{
     const day=inp.dataset.add||null;
     inp.value="";
     const data={title,day,owner:(S.mine&&S.me)?S.me:(S.fPerson||""),project:S.fProject||"",priority:"",due:"",notes:"",done:false,order:Date.now(),createdAt:Date.now()};
-    const ok=await write(()=>col("tasks").add(data));
+    let ref=null;
+    const ok=await write(async()=>{ref=await col("tasks").add(data)});
+    if(ok&&ref&&data.owner)notify(data.owner,(S.me||"Alguém")+" atribuiu uma tarefa para você: "+title+(day?" ("+brShort(day)+")":""),{type:"task",id:ref.id});
     if(ok){const again=board.querySelector('[data-add="'+(day||"")+'"]');if(again)again.focus()}
     return;
   }
@@ -634,7 +712,10 @@ function openTask(id){
     const data={title,day,due:$("t-due").value||"",owner:$("t-owner").value.trim(),priority:$("t-prio").value,project:$("t-proj").value,notes:$("t-notes").value,done:$("t-done").checked};
     if(day!==(t.day||null))data.order=Date.now();
     if(data.done!==!!t.done)data.doneAt=data.done?Date.now():null;
-    if(await write(()=>col("tasks").doc(id).update(data)))closeModal();
+    if(await write(()=>col("tasks").doc(id).update(data))){
+      if(data.owner&&data.owner!==(t.owner||""))notify(data.owner,(S.me||"Alguém")+" passou uma tarefa para você: "+title+(day?" ("+brShort(day)+")":""),{type:"task",id});
+      closeModal();
+    }
   };
 }
 
@@ -678,7 +759,7 @@ function riskBlock(boxId,pid){
     box.querySelectorAll("[data-rdel]").forEach(b=>{let c=false;b.onclick=async()=>{if(!c){c=true;b.textContent="Excluir?";return}await write(()=>col("risks").doc(b.dataset.rdel).delete())}});
     const add=async()=>{const t=$(boxId+"-t").value.trim();if(!t){$(boxId+"-t").focus();return}
       const data={projectId:pid,text:t,owner:$(boxId+"-o").value.trim(),due:$(boxId+"-d").value||"",status:"aberto",resolvedAt:"",createdAt:Date.now()};
-      if(await write(()=>col("risks").add(data))){$(boxId+"-t").value="";$(boxId+"-o").value="";$(boxId+"-d").value=""}};
+      if(await write(()=>col("risks").add(data))){if(data.owner)notify(data.owner,"Novo risco sob sua responsabilidade ("+projName(pid)+"): "+t+(data.due?" · prazo "+br(data.due):""),{type:"risk",id:pid});$(boxId+"-t").value="";$(boxId+"-o").value="";$(boxId+"-d").value=""}};
     $(boxId+"-a").onclick=add;$(boxId+"-t").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();add()}};
   };
   draw();
@@ -744,6 +825,7 @@ function openUpdate(uid,presetProject){
     const data={projectId:pid,date,author:$("u-author").value.trim(),status:$("u-status").value,phase:$("u-phase").value,progress,done:$("u-done").value.trim(),next:$("u-next").value.trim()};
     if($("u-risks"))data.risks=$("u-risks").value.trim();
     const ok=u?await write(()=>col("updates").doc(uid).update(data)):await write(()=>col("updates").add(Object.assign(data,{createdAt:Date.now()})));
+    if(ok&&!u){const pj=S.projects.find(x=>x.id===pid);if(pj&&pj.manager)notify(pj.manager,(data.author||S.me||"Alguém")+" registrou a atualização semanal de "+pj.name+(data.status?" ("+STATUS[data.status]+")":""),{type:"updates"})}
     if(ok)closeModal();
   };
 }
@@ -893,7 +975,7 @@ function showLogin(msg,denied){
   $("login-btn").hidden=!!denied;$("login-out").hidden=!denied;
 }
 function startData(db){
-  let pending=5;
+  let pending=6;
   const timer=setTimeout(()=>{if(!S.loaded){S.loaded=true;banner("Não consegui carregar os dados ainda. Confira a internet; a página tenta de novo sozinha.",true);renderAll()}},10000);
   const got=()=>{if(!S.loaded){pending--;if(pending<=0){S.loaded=true;clearTimeout(timer);const b=$("banner");if(b.textContent.startsWith("Não consegui carregar"))banner("")}}};
   let deniedShown=false;
@@ -902,11 +984,12 @@ function startData(db){
     else banner("A conexão com o quadro caiu. Recarregue a página para continuar.",true);
     renderAll()};
   const mapDocs=snap=>snap.docs.map(d=>Object.assign({id:d.id},d.data()));
-  const flags={tasks:false,projects:false,updates:false,team:false,risks:false};
+  const flags={tasks:false,projects:false,updates:false,team:false,risks:false,notifs:false};
   const once=(k,snap)=>{if(!flags[k]&&!snap.metadata.fromCache){flags[k]=true;got()}};
   db.collection("tasks").onSnapshot(s=>{S.tasks=mapDocs(s).filter(t=>t&&typeof t.title==="string");once("tasks",s);renderAll()},fail);
   db.collection("projects").onSnapshot(s=>{S.projects=mapDocs(s).filter(p=>p&&typeof p.name==="string");once("projects",s);renderAll()},fail);
   db.collection("updates").onSnapshot(s=>{S.updates=mapDocs(s);once("updates",s);renderAll()},fail);
+  db.collection("notifs").onSnapshot(s=>{S.notifs=mapDocs(s).filter(n=>n&&typeof n.text==="string");once("notifs",s);renderBell()},e=>{once("notifs",{metadata:{fromCache:false}})});
   db.collection("risks").onSnapshot(s=>{S.risks=mapDocs(s).filter(r=>r&&typeof r.text==="string");once("risks",s);renderAll()},fail);
   db.doc("config/team").onSnapshot(s=>{const d=s.exists?s.data():null;S.team=d&&Array.isArray(d.members)?d.members.filter(x=>typeof x==="string"):[];once("team",s);renderAll()},fail);
 }
