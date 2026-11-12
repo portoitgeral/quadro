@@ -3,35 +3,38 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Quadro de Projetos da Equipe</title>
+<title>Quadro de Projetos · Porto iT</title>
+<link rel="icon" type="image/png" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<meta name="theme-color" content="#004388">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@500;600;700&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700&display=swap" rel="stylesheet">
 <style>
 /* Layout: cabeçalho fixo com abas; quadro = colunas por dia com rolagem lateral; atualizações = resumo por projeto + histórico */
 :root{
-  --bg:#FAF7F2; --surface:#FFFFFF; --col:#F7EAEC; --ink:#2B2427; --muted:#76696E; --line:#EADDD9;
-  --accent:#3D7A58; --accent-ink:#FFFFFF; --accent-soft:#E3EFE7;
-  --rose:#C25E7A; --rose-soft:#FBE3EA;
-  --hi:#C8423B; --md:#C98E1E; --lo:#3D7A58; --done:#A3979B;
-  --font-display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
-  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --bg:#F3F5F8; --surface:#FFFFFF; --col:#E8EDF3; --ink:#1B1B1B; --muted:#706F6F; --line:#D5DBE3;
+  --accent:#1D71B8; --accent-ink:#FFFFFF; --accent-soft:#E2EEF9;
+  --rose:#004388; --rose-soft:#E1EAF5; --header:#004388;
+  --hi:#C8423B; --md:#C98E1E; --lo:#2E8A5E; --done:#B2B2B2;
+  --font-display:"Saira","Segoe UI",system-ui,sans-serif;
+  --font-body:"Nunito Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --bg:#1A1718; --surface:#252022; --col:#2C2226; --ink:#F2ECE7; --muted:#B3A6AA; --line:#3B3236;
-    --accent:#7CC39A; --accent-ink:#10201A; --accent-soft:#233A2D;
-    --rose:#EE9DB3; --rose-soft:#43262F;
-    --hi:#F0716A; --md:#E6B246; --lo:#7CC39A; --done:#7D7276;
+    --bg:#0E1520; --surface:#16202E; --col:#121B27; --ink:#EEF2F7; --muted:#A9B3C1; --line:#26344A;
+    --accent:#5AA6E8; --accent-ink:#0A1420; --accent-soft:#1A3350;
+    --rose:#8FC0F0; --rose-soft:#1B2E47; --header:#0A2E5C;
+    --hi:#F0716A; --md:#E6B246; --lo:#5CC08E; --done:#6F7A8A;
     color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
-  --bg:#1A1718; --surface:#252022; --col:#2C2226; --ink:#F2ECE7; --muted:#B3A6AA; --line:#3B3236;
-  --accent:#7CC39A; --accent-ink:#10201A; --accent-soft:#233A2D;
-  --rose:#EE9DB3; --rose-soft:#43262F;
-  --hi:#F0716A; --md:#E6B246; --lo:#7CC39A; --done:#7D7276;
+  --bg:#0E1520; --surface:#16202E; --col:#121B27; --ink:#EEF2F7; --muted:#A9B3C1; --line:#26344A;
+  --accent:#5AA6E8; --accent-ink:#0A1420; --accent-soft:#1A3350;
+  --rose:#8FC0F0; --rose-soft:#1B2E47; --header:#0A2E5C;
+  --hi:#F0716A; --md:#E6B246; --lo:#5CC08E; --done:#6F7A8A;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -40,16 +43,22 @@ body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-siz
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-h1,h2,h3{font-family:var(--font-display);font-weight:600;margin:0;text-wrap:balance}
+h1,h2,h3{font-family:var(--font-display);font-weight:600;margin:0;text-wrap:balance;letter-spacing:.01em}
 
-header{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:3px solid var(--rose-soft)}
-.top h1{color:var(--rose)}
+header{position:sticky;top:0;z-index:5;background:var(--header);color:#fff;box-shadow:0 2px 10px rgba(0,30,70,.18)}
+.brand{display:flex;align-items:center;gap:12px}
+.brand img{height:30px;width:auto;display:block}
+.brand .sep{width:1px;height:22px;background:rgba(255,255,255,.35)}
+.brand .area{font-family:var(--font-display);font-weight:500;font-size:15px;letter-spacing:.04em;text-transform:uppercase;opacity:.85}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .top{display:flex;align-items:center;gap:16px;padding:12px 16px;flex-wrap:wrap}
-.top h1{font-size:20px;letter-spacing:.01em}
 .tabs{display:flex;gap:4px;margin-left:auto}
-.tab{border:0;background:transparent;padding:8px 14px;border-radius:8px;color:var(--muted);font-weight:500}
-.tab[aria-selected="true"]{background:var(--accent-soft);color:var(--accent)}
-.icon-btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 10px;color:var(--muted)}
+.tab{border:0;background:transparent;padding:8px 14px;border-radius:8px;color:rgba(255,255,255,.75);font-weight:600;font-family:var(--font-display);letter-spacing:.02em}
+.tab:hover{color:#fff}
+.tab[aria-selected="true"]{background:rgba(255,255,255,.16);color:#fff;box-shadow:inset 0 -3px 0 #fff}
+.icon-btn{border:1px solid rgba(255,255,255,.4);background:transparent;border-radius:8px;padding:7px 10px;color:#fff;font-weight:600}
+.icon-btn:hover{background:rgba(255,255,255,.12)}
+header :focus-visible{outline-color:#fff}
 .banner{padding:8px 16px;font-size:13px;background:var(--accent-soft);color:var(--ink);display:none}
 .banner.show{display:block}
 
@@ -100,9 +109,9 @@ textarea{width:100%;min-height:70px;resize:vertical}
 .meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
 .tag{font-size:11.5px;border-radius:5px;padding:1px 6px;background:var(--col);color:var(--muted);font-variant-numeric:tabular-nums}
 .tag.proj{background:var(--rose-soft);color:var(--rose)}
-:root{--p0:#7656A8;--p1:#2A7489;--p2:#B8622A;--p3:#5E7D2A;--p4:#A2477A;--p5:#4F5DA8}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--p0:#B79BEA;--p1:#6FC1D4;--p2:#F0A26B;--p3:#A9C973;--p4:#E691C0;--p5:#9AA8F0}}
-:root[data-theme="dark"]{--p0:#B79BEA;--p1:#6FC1D4;--p2:#F0A26B;--p3:#A9C973;--p4:#E691C0;--p5:#9AA8F0}
+:root{--p0:#7656A8;--p1:#B8622A;--p2:#2E8A5E;--p3:#A2477A;--p4:#1F8585;--p5:#977612}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--p0:#B79BEA;--p1:#F0A26B;--p2:#7FD0A6;--p3:#E691C0;--p4:#6ED0CF;--p5:#E2C35E}}
+:root[data-theme="dark"]{--p0:#B79BEA;--p1:#F0A26B;--p2:#7FD0A6;--p3:#E691C0;--p4:#6ED0CF;--p5:#E2C35E}
 .tag.who{font-weight:600;color:var(--pc);background:color-mix(in srgb,var(--pc) 15%,transparent)}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--pc);flex:none}
 .tag.late{background:transparent;color:var(--hi);border:1px solid var(--hi)}
@@ -154,13 +163,20 @@ textarea{width:100%;min-height:70px;resize:vertical}
 .inline input{flex:1}
 .err{color:var(--hi);font-size:13px;min-height:1em}
 
-.login{position:fixed;inset:0;background:var(--bg);z-index:30;display:none;align-items:center;justify-content:center;padding:16px}
+.login{position:fixed;inset:0;background:var(--header);z-index:30;display:none;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:24px 16px;overflow-y:auto}
 .login.show{display:flex}
-.login-box{background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--rose);border-radius:14px;padding:28px 24px;max-width:380px;width:100%;display:flex;flex-direction:column;gap:12px;text-align:center}
-.login-box h1{color:var(--rose);font-size:24px}
+.login::before{content:"";position:absolute;right:-18vmax;bottom:-18vmax;width:60vmax;height:60vmax;border-radius:50%;border:5vmax solid rgba(255,255,255,.06);pointer-events:none}
+.login-logo{height:56px;width:auto;position:relative}
+.login-box{position:relative;background:var(--surface);border-radius:16px;padding:30px 26px;max-width:400px;width:100%;display:flex;flex-direction:column;gap:14px;text-align:center;box-shadow:0 20px 50px rgba(0,20,50,.35)}
+.login-box h2{color:var(--rose);font-size:24px}
 .login-box p{margin:0;color:var(--muted)}
+.gbtn{display:flex;align-items:center;justify-content:center;gap:10px;padding:11px 14px;font-size:15px}
+.gbtn svg{width:18px;height:18px;background:#fff;border-radius:50%;padding:2px;box-sizing:content-box}
+.login-box .err:empty{display:none}
+.login-foot{position:relative;color:rgba(255,255,255,.7);font-size:13px;margin:0}
 @media (max-width:520px){
-  .top h1{font-size:18px}
+  .brand img{height:26px}
+  .brand .sep,.brand .area{display:none}
   .tabs{margin-left:0;width:100%}
   .tab{flex:1}
   .weeknav h2{min-width:0;font-size:16px}
@@ -173,7 +189,7 @@ textarea{width:100%;min-height:70px;resize:vertical}
 <body>
 <header>
   <div class="top">
-    <h1>Quadro de Projetos</h1>
+    <div class="brand"><img src="logo.png" alt="Porto iT" width="132" height="30"><span class="sep"></span><span class="area">Projetos</span><h1 class="sr">Quadro de Projetos</h1></div>
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" id="tab-quadro" aria-selected="true">Quadro</button>
       <button class="tab" role="tab" id="tab-atualizacoes" aria-selected="false">Atualizações semanais</button>
@@ -223,13 +239,17 @@ textarea{width:100%;min-height:70px;resize:vertical}
   </section>
 </main>
 
-<div class="login" id="login"><div class="login-box">
-  <h1>Quadro de Projetos</h1>
-  <p id="login-msg">Entre com sua conta Google para ver e editar as tarefas da equipe.</p>
-  <button class="btn primary" id="login-btn">Entrar com Google</button>
-  <button class="btn" id="login-out" hidden>Usar outra conta</button>
-  <p class="err" id="login-err"></p>
-</div></div>
+<div class="login" id="login">
+  <img class="login-logo" src="logo.png" alt="Porto iT" width="246" height="56">
+  <div class="login-box">
+    <h2>Quadro de Projetos</h2>
+    <p id="login-msg">Entre com sua conta Google para ver e organizar as tarefas da equipe.</p>
+    <button class="btn primary gbtn" id="login-btn"><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17.1z"/><path fill="#FBBC05" d="M10.5 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.2-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>Entrar com Google</button>
+    <button class="btn" id="login-out" hidden>Usar outra conta</button>
+    <p class="err" id="login-err"></p>
+  </div>
+  <p class="login-foot">Equipe de Gestão de Projetos</p>
+</div>
 <div class="overlay" id="overlay"><div class="modal" id="modal" role="dialog" aria-modal="true"></div></div>
 
 <script type="module">
