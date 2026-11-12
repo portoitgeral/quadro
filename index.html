@@ -144,6 +144,37 @@ textarea{width:100%;min-height:70px;resize:vertical}
 .entry dt{color:var(--muted)}
 .entry dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
 
+.remind{display:flex;width:100%;text-align:left;gap:8px;align-items:center;background:color-mix(in srgb,var(--md) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--md) 45%,transparent);color:var(--ink);border-radius:10px;padding:9px 12px;margin-bottom:14px;font-size:14px}
+.remind[hidden]{display:none}
+button.remind{cursor:pointer}
+.remind b{font-weight:700}
+.phase{font-size:12px;font-weight:700;border-radius:999px;padding:2px 9px;background:var(--accent-soft);color:var(--accent);font-family:var(--font-display);letter-spacing:.02em}
+.pmeta{font-size:13px;color:var(--muted)}
+.bar{height:8px;background:var(--col);border-radius:99px;overflow:hidden;flex:1}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:99px}
+.prog{display:flex;align-items:center;gap:8px;font-size:13px;font-variant-numeric:tabular-nums}
+.prog b{min-width:38px}
+.delta{font-size:12px;font-weight:700}
+.delta.up{color:var(--lo)}.delta.down{color:var(--hi)}
+.gl{font-size:13px;font-variant-numeric:tabular-nums}
+.gl.late{color:var(--hi);font-weight:700}
+.replan{font-size:12px;color:var(--md);font-weight:600}
+.rk{font-size:13px;color:var(--hi);font-weight:600}
+.pbtns{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.risks{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.risk{display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-left:4px solid var(--hi);border-radius:0;padding:7px 9px;background:var(--surface)}
+.risk.ok{border-left-color:var(--lo);opacity:.7}
+.risk .rt{flex:1;min-width:0;font-size:14px;overflow-wrap:anywhere}
+.risk .rm{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.risk .rm .late{color:var(--hi);font-weight:700}
+.risk.ok .rt{text-decoration:line-through}
+.riskadd{display:grid;grid-template-columns:1fr 120px 140px auto;gap:6px}
+.range{display:flex;gap:10px;align-items:center}
+.range input[type=range]{flex:1;accent-color:var(--accent)}
+.range input[type=number]{width:74px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
+.sub{font-family:var(--font-display);font-size:15px;margin:14px 0 8px}
+textarea.summary{min-height:300px;font-family:var(--font-body);font-size:13.5px}
+.replist{font-size:13px;color:var(--muted);margin:0 0 10px;padding-left:18px}
 /* Modal */
 .overlay{position:fixed;inset:0;background:rgba(10,14,22,.45);display:none;align-items:flex-start;justify-content:center;padding:6vh 12px;z-index:20;overflow-y:auto}
 .overlay.show{display:flex}
@@ -183,6 +214,8 @@ textarea{width:100%;min-height:70px;resize:vertical}
   .weeknav h2{min-width:0;font-size:16px}
   .column{flex-basis:84vw}
   .two{grid-template-columns:1fr}
+  .riskadd{grid-template-columns:1fr 1fr}
+  .riskadd input:first-child{grid-column:1/-1}
 }
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 </style>
@@ -203,6 +236,7 @@ textarea{width:100%;min-height:70px;resize:vertical}
 
 <main>
   <section id="view-quadro">
+    <button class="remind" id="remind-board" hidden></button>
     <div class="toolbar">
       <div class="weeknav">
         <button class="btn small" id="prev" aria-label="Semana anterior">‹</button>
@@ -225,9 +259,11 @@ textarea{width:100%;min-height:70px;resize:vertical}
   </section>
 
   <section id="view-atualizacoes" hidden>
+    <div class="remind" id="remind" hidden></div>
     <div class="section-head">
       <h2>Situação dos projetos</h2>
       <span class="spacer"></span>
+      <button class="btn" id="btn-summary">Copiar resumo da semana</button>
       <button class="btn primary" id="new-update">+ Nova atualização</button>
     </div>
     <div class="grid" id="pgrid"></div>
@@ -274,8 +310,9 @@ const DAYS=["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"];
 const DAYS_FULL=["Segunda","Terça","Quarta","Quinta","Sexta","Sábado","Domingo"];
 const STATUS={ok:"No prazo",warn:"Atenção",bad:"Atrasado",done:"Concluído"};
 const PRIO={alta:"Alta",media:"Média",baixa:"Baixa"};
+const PHASES=["Planejamento","Execução","Homologação","Go-live"];
 
-const S={tasks:[],projects:[],updates:[],team:[],week:monday(new Date()),days:[0,1,2,3,4],backlog:true,
+const S={tasks:[],projects:[],updates:[],risks:[],team:[],week:monday(new Date()),days:[0,1,2,3,4],backlog:true,
   fPerson:"",fProject:"",hProject:"",me:"",mine:true,tab:"quadro",canWrite:true,db:null,uid:null,loaded:false};
 
 /* ---------- utilidades ---------- */
@@ -392,7 +429,39 @@ function renderBoard(){
 }
 
 /* ---------- render: atualizações ---------- */
-function latestUpdate(pid){return S.updates.filter(u=>u.projectId===pid).sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0))[0]}
+function updatesOf(pid){return S.updates.filter(u=>u.projectId===pid).sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0))}
+function latestUpdate(pid){return updatesOf(pid)[0]}
+function isNum(x){return typeof x==="number"&&isFinite(x)}
+function progressInfo(pid){
+  const us=updatesOf(pid).filter(u=>isNum(u.progress));
+  if(!us.length)return null;
+  return {value:us[0].progress,delta:us.length>1?us[0].progress-us[1].progress:null};
+}
+function openRisks(pid){return S.risks.filter(r=>r.projectId===pid&&r.status!=="resolvido")}
+function goLiveHTML(p,u){
+  if(!p.goLive)return "";
+  const td=today(),d=daysBetween(td,p.goLive);
+  let h;
+  if(u&&u.status==="done")h='<div class="gl">Go-live: '+br(p.goLive)+'</div>';
+  else if(d>0)h='<div class="gl">Go-live em <b>'+d+' dia'+(d===1?'':'s')+'</b> · '+br(p.goLive)+'</div>';
+  else if(d===0)h='<div class="gl"><b>Go-live hoje</b></div>';
+  else h='<div class="gl late">Go-live previsto passou há '+(-d)+' dia'+(d===-1?'':'s')+' ('+br(p.goLive)+')</div>';
+  const n=Array.isArray(p.replans)?p.replans.length:0;
+  if(n&&p.goLiveBase){const shift=daysBetween(p.goLiveBase,p.goLive);h+='<div class="replan">Replanejado '+n+'× ('+(shift>=0?'+':'')+shift+' dias desde o plano original)</div>'}
+  return h;
+}
+function pendingThisWeek(){
+  const mon=iso(monday(new Date()));
+  return S.projects.filter(p=>!p.archived).filter(p=>{const u=latestUpdate(p.id);if(u&&u.status==="done")return false;return !u||u.date<mon});
+}
+function renderReminder(){
+  const pend=S.loaded?pendingThisWeek():[];
+  const names=pend.map(p=>p.name);
+  const txt=pend.length?'<b>Lembrete:</b> falta'+(pend.length>1?'m':'')+' atualizar '+pend.length+' projeto'+(pend.length>1?'s':'')+' esta semana: '+esc(names.slice(0,4).join(", "))+(names.length>4?' e mais '+(names.length-4):'')+'.':'';
+  const r=$("remind");r.hidden=!pend.length;r.innerHTML=txt;
+  const wd=new Date().getDay();
+  const rb=$("remind-board");rb.hidden=!(pend.length&&(wd===4||wd===5||wd===6||wd===0));rb.innerHTML=txt+' <span style="margin-left:auto;color:var(--accent);font-weight:700">Atualizar agora ›</span>';
+}
 function renderProjects(){
   const projs=S.projects.filter(p=>!p.archived).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
   const td=today();
@@ -402,12 +471,22 @@ function renderProjects(){
     const open=S.tasks.filter(t=>t.project===p.id&&!t.done).length;
     const age=u?daysBetween(u.date,td):null;
     const stale=!u||age>7;
+    const pr=progressInfo(p.id);
+    const rk=openRisks(p.id);const rkLate=rk.filter(r=>r.due&&r.due<td).length;
+    const meta=[p.client,p.manager?'GP: '+p.manager:''].filter(Boolean).map(esc).join(' · ');
     return '<div class="pcard"><div class="row"><h3>'+esc(p.name)+'</h3></div>'+
-      '<div class="row">'+(u?'<span class="pill '+esc(u.status||"none")+'">'+esc(STATUS[u.status]||"Sem status")+'</span>':'<span class="pill none">Sem atualização</span>')+'</div>'+
+      (meta?'<div class="pmeta">'+meta+'</div>':'')+
+      '<div class="row">'+(u?'<span class="pill '+esc(u.status||"none")+'">'+esc(STATUS[u.status]||"Sem status")+'</span>':'<span class="pill none">Sem atualização</span>')+
+        (u&&u.phase?'<span class="phase">'+esc(u.phase)+'</span>':'')+'</div>'+
+      (pr?'<div class="prog"><b>'+pr.value+'%</b><div class="bar"><i style="width:'+Math.max(0,Math.min(100,pr.value))+'%"></i></div>'+(pr.delta?'<span class="delta '+(pr.delta>0?'up':'down')+'">'+(pr.delta>0?'+':'')+pr.delta+'%</span>':'')+'</div>':'')+
+      goLiveHTML(p,u)+
+      (rk.length?'<div class="rk">'+rk.length+' risco'+(rk.length>1?'s':'')+' aberto'+(rk.length>1?'s':'')+(rkLate?' · '+rkLate+' com prazo vencido':'')+'</div>':'')+
       '<div class="line">'+(u?'Última atualização: '+br(u.date)+(u.author?' · '+esc(u.author):''):'Ainda não teve atualização')+'</div>'+
       (stale&&!(u&&u.status==="done")?'<div class="stale">'+(u?'Sem atualização há '+age+' dias':'Precisa da primeira atualização')+'</div>':'')+
       '<div class="line">'+open+' tarefa'+(open===1?'':'s')+' em aberto no quadro</div>'+
-      (S.canWrite?'<div><button class="btn small" data-upd="'+esc(p.id)+'">Atualizar</button></div>':'')+
+      '<div class="pbtns">'+(S.canWrite?'<button class="btn small primary" data-upd="'+esc(p.id)+'">Atualizar</button>':'')+
+        '<button class="btn small" data-proj="'+esc(p.id)+'">Dados do projeto</button>'+
+        '<button class="btn small" data-risk="'+esc(p.id)+'">Riscos</button></div>'+
     '</div>';
   }).join("");
 }
@@ -418,6 +497,7 @@ function renderHistory(){
   if(!list.length){$("hist").innerHTML='<div class="empty">'+(S.loaded?'Nenhuma atualização registrada.':'Carregando…')+'</div>';return}
   $("hist").innerHTML=list.map(u=>{
     let dl="";
+    if(u.phase||isNum(u.progress))dl+='<dt>Fase</dt><dd>'+esc(u.phase||"—")+(isNum(u.progress)?' · '+u.progress+'% concluído':'')+'</dd>';
     if(u.done)dl+='<dt>Feito</dt><dd>'+esc(u.done)+'</dd>';
     if(u.next)dl+='<dt>Próximos passos</dt><dd>'+esc(u.next)+'</dd>';
     if(u.risks)dl+='<dt>Riscos</dt><dd>'+esc(u.risks)+'</dd>';
@@ -427,8 +507,9 @@ function renderHistory(){
   }).join("");
 }
 function renderAll(){
-  renderDayChips();renderFilters();renderBoard();renderProjects();renderHistory();
+  renderDayChips();renderFilters();renderBoard();renderProjects();renderHistory();renderReminder();
   $("new-update").hidden=!S.canWrite;
+  if(S.riskRefresh)S.riskRefresh();
 }
 
 /* ---------- abas ---------- */
@@ -479,7 +560,7 @@ board.addEventListener("keydown",async e=>{
 });
 board.addEventListener("click",e=>{
   const chk=e.target.closest(".chk");
-  if(chk){e.stopPropagation();const id=chk.closest(".card").dataset.id;const done=chk.checked;write(()=>col("tasks").doc(id).update({done}));return}
+  if(chk){e.stopPropagation();const id=chk.closest(".card").dataset.id;const done=chk.checked;write(()=>col("tasks").doc(id).update({done,doneAt:done?Date.now():null}));return}
   const card=e.target.closest(".card");
   if(card)openTask(card.dataset.id);
 });
@@ -506,8 +587,8 @@ board.addEventListener("drop",e=>{
 
 /* ---------- modal ---------- */
 const overlay=$("overlay"),modal=$("modal");
-function openModal(html){modal.innerHTML=html;overlay.classList.add("show");const f=modal.querySelector("input,select,textarea");if(f)setTimeout(()=>f.focus(),30)}
-function closeModal(){overlay.classList.remove("show");modal.innerHTML=""}
+function openModal(html){S.riskRefresh=null;modal.innerHTML=html;overlay.classList.add("show");const f=modal.querySelector("input,select,textarea");if(f)setTimeout(()=>f.focus(),30)}
+function closeModal(){overlay.classList.remove("show");modal.innerHTML="";S.riskRefresh=null}
 overlay.addEventListener("click",e=>{if(e.target===overlay)closeModal()});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&overlay.classList.contains("show"))closeModal()});
 function teamList(id){return '<datalist id="'+id+'">'+S.team.map(p=>'<option value="'+esc(p)+'">').join("")+'</datalist>'}
@@ -544,6 +625,7 @@ function openTask(id){
     const day=$("t-day").value||null;
     const data={title,day,due:$("t-due").value||"",owner:$("t-owner").value.trim(),priority:$("t-prio").value,project:$("t-proj").value,notes:$("t-notes").value,done:$("t-done").checked};
     if(day!==(t.day||null))data.order=Date.now();
+    if(data.done!==!!t.done)data.doneAt=data.done?Date.now():null;
     if(await write(()=>col("tasks").doc(id).update(data)))closeModal();
   };
 }
@@ -556,42 +638,188 @@ async function ensureProject(name){
   return ok&&ref?ref.id:null;
 }
 
+function prefillDone(pid,date){
+  const end=date||today(), startD=iso(addDays(parse(end),-6));
+  const inRange=t=>{if(t.doneAt){const d=iso(new Date(t.doneAt));return d>=startD&&d<=end}return t.day&&t.day>=startD&&t.day<=end};
+  return S.tasks.filter(t=>t.project===pid&&t.done&&inRange(t)).map(t=>"• "+t.title).join("\n");
+}
+function prefillNext(pid,date){
+  const st=date||today(), endD=iso(addDays(parse(st),10));
+  return S.tasks.filter(t=>t.project===pid&&!t.done&&(!t.day||(t.day>=st&&t.day<=endD))).sort((a,b)=>(a.day||"9").localeCompare(b.day||"9")).slice(0,8).map(t=>"• "+t.title+(t.day?" ("+brShort(t.day)+")":"")).join("\n");
+}
+function riskBlock(boxId,pid){
+  const box=$(boxId);if(!box)return;
+  const td=today();
+  const draw=()=>{
+    if(!pid){box.innerHTML='<p class="hint">Escolha o projeto para ver e cadastrar riscos.</p>';return}
+    const list=S.risks.filter(r=>r.projectId===pid).sort((a,b)=>((a.status==="resolvido")-(b.status==="resolvido"))||(a.due||"9").localeCompare(b.due||"9"));
+    box.innerHTML='<div class="risks">'+(list.length?list.map(r=>{
+      const ok=r.status==="resolvido";
+      return '<div class="risk'+(ok?' ok':'')+'"><div class="rt">'+esc(r.text)+'<div class="rm">'+(r.owner?'Resp.: '+esc(r.owner):'Sem responsável')+(r.due?' · <span class="'+(!ok&&r.due<td?'late':'')+'">Prazo '+br(r.due)+'</span>':'')+(ok&&r.resolvedAt?' · resolvido em '+br(r.resolvedAt):'')+'</div></div>'+
+        (S.canWrite?'<button type="button" class="btn small" data-rtog="'+esc(r.id)+'">'+(ok?'Reabrir':'Resolver')+'</button><button type="button" class="btn small" data-rdel="'+esc(r.id)+'" aria-label="Excluir risco">×</button>':'')+'</div>';
+    }).join(""):'<p class="hint">Nenhum risco cadastrado.</p>')+'</div>'+
+    (S.canWrite?'<div class="riskadd"><input type="text" id="'+boxId+'-t" placeholder="Novo risco ou impedimento" aria-label="Novo risco"><input type="text" id="'+boxId+'-o" list="dl-team-r" placeholder="Responsável" aria-label="Responsável">'+teamList("dl-team-r")+'<input type="date" id="'+boxId+'-d" aria-label="Prazo"><button type="button" class="btn" id="'+boxId+'-a">Adicionar</button></div>':'');
+    if(!S.canWrite)return;
+    box.querySelectorAll("[data-rtog]").forEach(b=>b.onclick=async()=>{const r=S.risks.find(x=>x.id===b.dataset.rtog);if(!r)return;const ok=r.status==="resolvido";await write(()=>col("risks").doc(r.id).update({status:ok?"aberto":"resolvido",resolvedAt:ok?"":today()}))});
+    box.querySelectorAll("[data-rdel]").forEach(b=>{let c=false;b.onclick=async()=>{if(!c){c=true;b.textContent="Excluir?";return}await write(()=>col("risks").doc(b.dataset.rdel).delete())}});
+    const add=async()=>{const t=$(boxId+"-t").value.trim();if(!t){$(boxId+"-t").focus();return}
+      const data={projectId:pid,text:t,owner:$(boxId+"-o").value.trim(),due:$(boxId+"-d").value||"",status:"aberto",resolvedAt:"",createdAt:Date.now()};
+      if(await write(()=>col("risks").add(data))){$(boxId+"-t").value="";$(boxId+"-o").value="";$(boxId+"-d").value=""}};
+    $(boxId+"-a").onclick=add;$(boxId+"-t").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();add()}};
+  };
+  draw();
+  S.riskRefresh=()=>{if(document.body.contains(box)){const a=document.activeElement;const keep=a&&a.id&&a.id.startsWith(boxId+"-")?{id:a.id,v:[...box.querySelectorAll(".riskadd input")].map(i=>i.value)}:null;draw();if(keep){[...box.querySelectorAll(".riskadd input")].forEach((i,k)=>i.value=keep.v[k]||"");const el=$(keep.id);if(el)el.focus()}}else S.riskRefresh=null};
+  return {setProject:np=>{pid=np;draw()}};
+}
+
 function openUpdate(uid,presetProject){
   const u=uid?S.updates.find(x=>x.id===uid):null;
-  const v=u||{projectId:presetProject||"",date:today(),author:S.me||"",status:"",done:"",next:"",risks:""};
+  const last=presetProject?latestUpdate(presetProject):null;
+  const v=u||{projectId:presetProject||"",date:today(),author:S.me||"",status:last?last.status||"":"",phase:last?last.phase||"":"",progress:last&&isNum(last.progress)?last.progress:null,
+    done:presetProject?prefillDone(presetProject,today()):"",next:presetProject?prefillNext(presetProject,today()):""};
   const ro=!S.canWrite?' disabled':'';
   const hasProj=S.projects.some(p=>!p.archived);
+  const prog=isNum(v.progress)?v.progress:"";
   openModal('<h2>'+(u?'Atualização':'Nova atualização')+'</h2><form id="uform">'+
-    '<div class="field"><label for="u-proj">Projeto</label><select id="u-proj"'+ro+'>'+(hasProj||v.projectId?'':'')+projOptions(v.projectId,false)+'<option value="__new">+ Novo projeto…</option></select>'+
+    '<div class="field"><label for="u-proj">Projeto</label><select id="u-proj"'+ro+(u?' disabled':'')+'>'+(u||presetProject?'':'<option value="">Escolha…</option>')+projOptions(v.projectId,false)+'<option value="__new">+ Novo projeto…</option></select>'+
     '<input type="text" id="u-newproj" placeholder="Nome do novo projeto" hidden></div>'+
     '<div class="two"><div class="field"><label for="u-date">Data da atualização</label><input type="date" id="u-date" required value="'+esc(v.date)+'"'+ro+'></div>'+
     '<div class="field"><label for="u-author">Quem atualizou</label><input type="text" id="u-author" list="dl-team2" value="'+esc(v.author||"")+'"'+ro+'>'+teamList("dl-team2")+'</div></div>'+
-    '<div class="field"><label for="u-status">Status</label><select id="u-status"'+ro+'><option value="">Sem status</option>'+Object.entries(STATUS).map(([k,s])=>'<option value="'+k+'"'+(v.status===k?' selected':'')+'>'+s+'</option>').join("")+'</select></div>'+
-    '<div class="field"><label for="u-done">O que foi feito</label><textarea id="u-done"'+ro+'>'+esc(v.done||"")+'</textarea></div>'+
+    '<div class="two"><div class="field"><label for="u-status">Status</label><select id="u-status"'+ro+'><option value="">Sem status</option>'+Object.entries(STATUS).map(([k,x])=>'<option value="'+k+'"'+(v.status===k?' selected':'')+'>'+x+'</option>').join("")+'</select></div>'+
+    '<div class="field"><label for="u-phase">Fase</label><select id="u-phase"'+ro+'><option value="">Sem fase</option>'+PHASES.map(f=>'<option'+(v.phase===f?' selected':'')+'>'+f+'</option>').join("")+'</select></div></div>'+
+    '<div class="field"><label for="u-prog">Avanço do projeto (%)</label><div class="range"><input type="range" id="u-progr" min="0" max="100" step="5" value="'+(prog===""?0:prog)+'"'+ro+' aria-label="Avanço"><input type="number" id="u-prog" min="0" max="100" value="'+prog+'" placeholder="—"'+ro+'></div>'+
+      (last&&isNum(last.progress)&&!u?'<span class="hint">Na última atualização estava em '+last.progress+'%.</span>':'')+'</div>'+
+    '<div class="field"><label for="u-done">O que foi feito</label><textarea id="u-done"'+ro+'>'+esc(v.done||"")+'</textarea>'+(!u?'<span class="hint">Já trouxe as tarefas do projeto concluídas nos últimos 7 dias. Ajuste à vontade.</span>':'')+'</div>'+
     '<div class="field"><label for="u-next">Próximos passos</label><textarea id="u-next"'+ro+'>'+esc(v.next||"")+'</textarea></div>'+
-    '<div class="field"><label for="u-risks">Riscos ou impedimentos</label><textarea id="u-risks"'+ro+'>'+esc(v.risks||"")+'</textarea></div>'+
+    (u&&u.risks?'<div class="field"><label for="u-risks">Observações de risco (texto antigo)</label><textarea id="u-risks"'+ro+'>'+esc(u.risks)+'</textarea></div>':'')+
+    '<div class="sub">Riscos e impedimentos do projeto</div><div id="u-rk"></div>'+
     '<div class="err" id="u-err"></div>'+
     '<div class="actions">'+(u&&S.canWrite?'<button type="button" class="btn danger left" id="u-del">Excluir</button>':'')+
-    '<button type="button" class="btn" id="u-cancel">'+(S.canWrite?'Cancelar':'Fechar')+'</button>'+(S.canWrite?'<button type="submit" class="btn primary">Salvar</button>':'')+'</div></form>');
+    '<button type="button" class="btn" id="u-cancel">'+(S.canWrite?'Cancelar':'Fechar')+'</button>'+(S.canWrite?'<button type="submit" class="btn primary">Salvar atualização</button>':'')+'</div></form>');
   const sel=$("u-proj"),np=$("u-newproj");
-  const sync=()=>{np.hidden=sel.value!=="__new";if(!np.hidden)np.focus()};
-  sel.onchange=sync; if(!hasProj&&!v.projectId){sel.value="__new";np.hidden=false}
+  const rb=riskBlock("u-rk",v.projectId&&v.projectId!=="__new"?v.projectId:"");
+  const pr=$("u-progr"),pn=$("u-prog");
+  pr.oninput=()=>{pn.value=pr.value};pn.oninput=()=>{const x=Math.max(0,Math.min(100,+pn.value||0));if(pn.value!=="")pr.value=x};
+  let touchedDone=false,touchedNext=false;
+  $("u-done").oninput=()=>{touchedDone=true};$("u-next").oninput=()=>{touchedNext=true};
+  const refill=()=>{
+    if(u)return;const pid=sel.value;const real=pid&&pid!=="__new"?pid:"";
+    if(!touchedDone)$("u-done").value=real?prefillDone(real,$("u-date").value):"";
+    if(!touchedNext)$("u-next").value=real?prefillNext(real,$("u-date").value):"";
+  };
+  sel.onchange=()=>{
+    np.hidden=sel.value!=="__new";if(!np.hidden)np.focus();
+    const real=sel.value&&sel.value!=="__new"?sel.value:"";
+    if(rb)rb.setProject(real);
+    const lu=real?latestUpdate(real):null;
+    if(lu&&!u){if(!$("u-status").value)$("u-status").value=lu.status||"";if(!$("u-phase").value)$("u-phase").value=lu.phase||"";if(pn.value===""&&isNum(lu.progress)){pn.value=lu.progress;pr.value=lu.progress}}
+    refill();
+  };
+  $("u-date").onchange=refill;
+  if(!hasProj&&!v.projectId){sel.value="__new";np.hidden=false}
   $("u-cancel").onclick=closeModal;
   if(!S.canWrite)return;
   if(u){let c=false;$("u-del").onclick=async()=>{if(!c){c=true;$("u-del").textContent="Confirmar exclusão";return}if(await write(()=>col("updates").doc(uid).delete()))closeModal()}}
   $("uform").onsubmit=async e=>{
     e.preventDefault();
-    let pid=sel.value;
+    let pid=u?u.projectId:sel.value;
     if(pid==="__new"){const n=np.value.trim();if(!n){$("u-err").textContent="Dê um nome ao novo projeto.";return}pid=await ensureProject(n);if(!pid)return}
     if(!pid){$("u-err").textContent="Escolha o projeto.";return}
     const date=$("u-date").value;if(!date){$("u-err").textContent="Informe a data da atualização.";return}
-    const data={projectId:pid,date,author:$("u-author").value.trim(),status:$("u-status").value,done:$("u-done").value.trim(),next:$("u-next").value.trim(),risks:$("u-risks").value.trim()};
+    const progress=pn.value===""?null:Math.max(0,Math.min(100,Math.round(+pn.value)));
+    const data={projectId:pid,date,author:$("u-author").value.trim(),status:$("u-status").value,phase:$("u-phase").value,progress,done:$("u-done").value.trim(),next:$("u-next").value.trim()};
+    if($("u-risks"))data.risks=$("u-risks").value.trim();
     const ok=u?await write(()=>col("updates").doc(uid).update(data)):await write(()=>col("updates").add(Object.assign(data,{createdAt:Date.now()})));
     if(ok)closeModal();
   };
 }
+
+function openProject(pid){
+  const p=S.projects.find(x=>x.id===pid);if(!p)return;
+  const ro=!S.canWrite?' disabled':'';
+  const reps=Array.isArray(p.replans)?p.replans:[];
+  openModal('<h2>Dados do projeto</h2><form id="pform">'+
+    '<div class="field"><label for="p-name">Nome do projeto</label><input type="text" id="p-name" required value="'+esc(p.name)+'"'+ro+'></div>'+
+    '<div class="two"><div class="field"><label for="p-client">Cliente</label><input type="text" id="p-client" value="'+esc(p.client||"")+'"'+ro+'></div>'+
+    '<div class="field"><label for="p-manager">Gerente do projeto</label><input type="text" id="p-manager" list="dl-team-p" value="'+esc(p.manager||"")+'"'+ro+'>'+teamList("dl-team-p")+'</div></div>'+
+    '<div class="two"><div class="field"><label for="p-start">Início</label><input type="date" id="p-start" value="'+esc(p.start||"")+'"'+ro+'></div>'+
+    '<div class="field"><label for="p-golive">Go-live previsto</label><input type="date" id="p-golive" value="'+esc(p.goLive||"")+'"'+ro+'></div></div>'+
+    '<div class="field" id="p-reason-f" hidden><label for="p-reason">Motivo da mudança do go-live</label><input type="text" id="p-reason" placeholder="Ex.: atraso na homologação do cliente"'+ro+'></div>'+
+    (p.goLiveBase?'<p class="hint">Go-live do plano original: '+br(p.goLiveBase)+'</p>':'')+
+    (reps.length?'<div class="sub">Replanejamentos</div><ul class="replist">'+reps.map(r=>'<li>'+br(r.at)+': '+br(r.from)+' → '+br(r.to)+(r.reason?' · '+esc(r.reason):'')+'</li>').join("")+'</ul>':'')+
+    '<div class="err" id="p-err"></div>'+
+    '<div class="actions"><button type="button" class="btn" id="p-cancel">'+(S.canWrite?'Cancelar':'Fechar')+'</button>'+(S.canWrite?'<button type="submit" class="btn primary">Salvar</button>':'')+'</div></form>');
+  $("p-cancel").onclick=closeModal;
+  const gl=$("p-golive");
+  gl.oninput=()=>{$("p-reason-f").hidden=!(p.goLive&&gl.value&&gl.value!==p.goLive)};
+  if(!S.canWrite)return;
+  $("pform").onsubmit=async e=>{
+    e.preventDefault();
+    const name=$("p-name").value.trim();if(!name){$("p-err").textContent="O nome é obrigatório.";return}
+    const data={name,client:$("p-client").value.trim(),manager:$("p-manager").value.trim(),start:$("p-start").value||"",goLive:gl.value||""};
+    if(data.goLive&&!p.goLiveBase)data.goLiveBase=data.goLive;
+    if(p.goLive&&data.goLive&&data.goLive!==p.goLive)data.replans=[...reps,{at:today(),from:p.goLive,to:data.goLive,reason:$("p-reason").value.trim()}];
+    if(await write(()=>col("projects").doc(pid).update(data)))closeModal();
+  };
+}
+
+function openRiskModal(pid){
+  openModal('<h2>Riscos · '+esc(projName(pid))+'</h2><div id="m-rk"></div><div class="actions"><button type="button" class="btn" id="rk-close">Fechar</button></div>');
+  riskBlock("m-rk",pid);
+  $("rk-close").onclick=closeModal;
+}
+
+function weekSummary(){
+  const mon=monday(new Date()),sun=addDays(mon,6),td=today();
+  const lines=["Resumo semanal de projetos · semana de "+brShort(iso(mon))+" a "+br(iso(sun)),""];
+  const projs=S.projects.filter(p=>!p.archived).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
+  const counts={};projs.forEach(p=>{const u=latestUpdate(p.id);const k=u&&u.status?STATUS[u.status]:"Sem status";counts[k]=(counts[k]||0)+1});
+  lines.push("Visão geral: "+Object.entries(counts).map(([k,n])=>n+" "+k.toLowerCase()).join(" · "));
+  projs.forEach(p=>{
+    const u=latestUpdate(p.id),pr=progressInfo(p.id),rk=openRisks(p.id);
+    lines.push("","━━━━━━━━━━━━━━━━━━━━");
+    lines.push(p.name+(p.client?" ("+p.client+")":"")+" · "+(u&&u.status?STATUS[u.status]:"Sem status"));
+    const info=[];
+    if(u&&u.phase)info.push("Fase: "+u.phase);
+    if(pr)info.push("Avanço: "+pr.value+"%"+(pr.delta?" ("+(pr.delta>0?"+":"")+pr.delta+"% na semana)":""));
+    if(p.manager)info.push("GP: "+p.manager);
+    if(info.length)lines.push(info.join(" · "));
+    if(p.goLive){
+      const d=daysBetween(td,p.goLive);
+      let g="Go-live: "+br(p.goLive)+(u&&u.status==="done"?"":d>0?" (em "+d+" dias)":d===0?" (hoje)":" (passou há "+(-d)+" dias)");
+      const n=Array.isArray(p.replans)?p.replans.length:0;
+      if(n&&p.goLiveBase){const sh=daysBetween(p.goLiveBase,p.goLive);g+=" · replanejado "+n+"x, "+(sh>=0?"+":"")+sh+" dias vs. plano original"}
+      lines.push(g);
+    }
+    if(!u||u.date<iso(mon))lines.push("Atenção: sem atualização nesta semana"+(u?" (última em "+br(u.date)+")":""));
+    if(u&&u.date>=iso(mon)){
+      if(u.done){lines.push("","Realizado:");u.done.split("\n").forEach(l=>{l=l.trim();if(l)lines.push(l.startsWith("•")?l:"• "+l)})}
+      if(u.next){lines.push("","Próximos passos:");u.next.split("\n").forEach(l=>{l=l.trim();if(l)lines.push(l.startsWith("•")?l:"• "+l)})}
+    }
+    if(rk.length){lines.push("","Riscos abertos:");rk.forEach(r=>lines.push("• "+r.text+(r.owner?" · resp.: "+r.owner:"")+(r.due?" · prazo "+br(r.due)+(r.due<td?" (vencido)":""):"")))}
+  });
+  return lines.join("\n");
+}
+function openSummary(){
+  const txt=weekSummary();
+  openModal('<h2>Resumo da semana</h2><p class="hint" style="margin:0 0 8px">Texto pronto para colar no e-mail ou no Teams. Dá pra editar aqui antes de copiar.</p>'+
+    '<textarea class="summary" id="sum-t" aria-label="Resumo da semana">'+esc(txt)+'</textarea>'+
+    '<div class="actions"><span class="hint left" id="sum-ok"></span><button type="button" class="btn" id="sum-close">Fechar</button><button type="button" class="btn primary" id="sum-copy">Copiar</button></div>');
+  $("sum-close").onclick=closeModal;
+  $("sum-copy").onclick=async()=>{
+    const t=$("sum-t");
+    try{await navigator.clipboard.writeText(t.value);$("sum-ok").textContent="Copiado!"}
+    catch(e){t.focus();t.select();try{document.execCommand("copy");$("sum-ok").textContent="Copiado!"}catch(e2){$("sum-ok").textContent="Selecione o texto e copie com Ctrl+C."}}
+  };
+}
 $("new-update").onclick=()=>openUpdate(null,"");
-$("pgrid").addEventListener("click",e=>{const b=e.target.closest("[data-upd]");if(b)openUpdate(null,b.dataset.upd)});
+$("pgrid").addEventListener("click",e=>{
+  const b=e.target.closest("[data-upd]");if(b)return openUpdate(null,b.dataset.upd);
+  const pj=e.target.closest("[data-proj]");if(pj)return openProject(pj.dataset.proj);
+  const rk=e.target.closest("[data-risk]");if(rk)return openRiskModal(rk.dataset.risk);
+});
+$("btn-summary").onclick=openSummary;
+$("remind-board").onclick=()=>setTab("atualizacoes");
 $("hist").addEventListener("click",e=>{const en=e.target.closest(".entry");if(en)openUpdate(en.dataset.uid)});
 $("hist").addEventListener("keydown",e=>{const en=e.target.closest(".entry");if(en&&e.key==="Enter")openUpdate(en.dataset.uid)});
 
@@ -604,7 +832,7 @@ function openSettings(){
       (S.team.length?S.team.map((p,i)=>'<div class="it"><i class="dot" style="--pc:'+pColor(p)+'"></i><span>'+esc(p)+'</span>'+(ro?'':'<button class="btn small" data-rm-team="'+i+'">Remover</button>')+'</div>').join(""):'<div class="empty">Ninguém cadastrado.</div>')+'</div>'+
       (ro?'':'<div class="inline" style="margin-bottom:18px"><input type="text" id="s-team" placeholder="Primeiro nome" aria-label="Nome da pessoa"><button class="btn" id="s-team-add">Adicionar</button></div>')+
       '<h3 style="font-size:16px;margin-bottom:8px">Projetos</h3><div class="list">'+
-      (projs.length?projs.map(p=>'<div class="it'+(p.archived?' arch':'')+'"><span>'+esc(p.name)+'</span>'+(ro?'':'<button class="btn small" data-arch="'+esc(p.id)+'">'+(p.archived?'Reativar':'Arquivar')+'</button>')+'</div>').join(""):'<div class="empty">Nenhum projeto.</div>')+'</div>'+
+      (projs.length?projs.map(p=>'<div class="it'+(p.archived?' arch':'')+'"><span>'+esc(p.name)+'</span>'+(ro?'':'<button class="btn small" data-edit="'+esc(p.id)+'">Dados</button><button class="btn small" data-arch="'+esc(p.id)+'">'+(p.archived?'Reativar':'Arquivar')+'</button>')+'</div>').join(""):'<div class="empty">Nenhum projeto.</div>')+'</div>'+
       (ro?'':'<div class="inline"><input type="text" id="s-proj" placeholder="Nome do projeto" aria-label="Nome do projeto"><button class="btn" id="s-proj-add">Adicionar</button></div>')+
       '<p class="hint">Projetos arquivados somem do quadro e do resumo, mas o histórico fica guardado.</p>'+
       '<div class="actions"><button class="btn" id="s-close">Fechar</button></div>';
@@ -615,6 +843,7 @@ function openSettings(){
     const addProj=async()=>{const n=$("s-proj").value.trim();if(!n)return;if(await ensureProject(n)){$("s-proj").value="";setTimeout(draw,300)}};
     $("s-proj-add").onclick=addProj;$("s-proj").onkeydown=e=>{if(e.key==="Enter")addProj()};
     modal.querySelectorAll("[data-rm-team]").forEach(b=>b.onclick=async()=>{const team=S.team.filter((_,i)=>i!==+b.dataset.rmTeam);if(await write(()=>S.db.doc("config/team").set({members:team}))){S.team=team;draw()}});
+    modal.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openProject(b.dataset.edit));
     modal.querySelectorAll("[data-arch]").forEach(b=>b.onclick=async()=>{const p=S.projects.find(x=>x.id===b.dataset.arch);if(!p)return;if(await write(()=>col("projects").doc(p.id).update({archived:!p.archived}))){p.archived=!p.archived;draw()}});
   };
   overlay.classList.add("show");draw();
@@ -640,7 +869,7 @@ function showLogin(msg,denied){
   $("login-btn").hidden=!!denied;$("login-out").hidden=!denied;
 }
 function startData(db){
-  let pending=4;
+  let pending=5;
   const timer=setTimeout(()=>{if(!S.loaded){S.loaded=true;banner("Não consegui carregar os dados ainda. Confira a internet; a página tenta de novo sozinha.",true);renderAll()}},10000);
   const got=()=>{if(!S.loaded){pending--;if(pending<=0){S.loaded=true;clearTimeout(timer);const b=$("banner");if(b.textContent.startsWith("Não consegui carregar"))banner("")}}};
   let deniedShown=false;
@@ -649,11 +878,12 @@ function startData(db){
     else banner("A conexão com o quadro caiu. Recarregue a página para continuar.",true);
     renderAll()};
   const mapDocs=snap=>snap.docs.map(d=>Object.assign({id:d.id},d.data()));
-  const flags={tasks:false,projects:false,updates:false,team:false};
+  const flags={tasks:false,projects:false,updates:false,team:false,risks:false};
   const once=(k,snap)=>{if(!flags[k]&&!snap.metadata.fromCache){flags[k]=true;got()}};
   db.collection("tasks").onSnapshot(s=>{S.tasks=mapDocs(s).filter(t=>t&&typeof t.title==="string");once("tasks",s);renderAll()},fail);
   db.collection("projects").onSnapshot(s=>{S.projects=mapDocs(s).filter(p=>p&&typeof p.name==="string");once("projects",s);renderAll()},fail);
   db.collection("updates").onSnapshot(s=>{S.updates=mapDocs(s);once("updates",s);renderAll()},fail);
+  db.collection("risks").onSnapshot(s=>{S.risks=mapDocs(s).filter(r=>r&&typeof r.text==="string");once("risks",s);renderAll()},fail);
   db.doc("config/team").onSnapshot(s=>{const d=s.exists?s.data():null;S.team=d&&Array.isArray(d.members)?d.members.filter(x=>typeof x==="string"):[];once("team",s);renderAll()},fail);
 }
 async function init(){
