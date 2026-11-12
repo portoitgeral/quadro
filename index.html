@@ -168,7 +168,9 @@ button.remind{cursor:pointer}
 .risk .rm{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .risk .rm .late{color:var(--hi);font-weight:700}
 .risk.ok .rt{text-decoration:line-through}
-.riskadd{display:grid;grid-template-columns:1fr 120px 140px auto;gap:6px}
+.riskadd{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:6px}
+.riskadd input{min-width:0;width:100%}
+.riskadd input:first-child{grid-column:1/-1}
 .range{display:flex;gap:10px;align-items:center}
 .range input[type=range]{flex:1;accent-color:var(--accent)}
 .range input[type=number]{width:74px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
@@ -214,8 +216,8 @@ textarea.summary{min-height:300px;font-family:var(--font-body);font-size:13.5px}
   .weeknav h2{min-width:0;font-size:16px}
   .column{flex-basis:84vw}
   .two{grid-template-columns:1fr}
-  .riskadd{grid-template-columns:1fr 1fr}
-  .riskadd input:first-child{grid-column:1/-1}
+  .riskadd{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .riskadd button{grid-column:1/-1}
 }
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 </style>
@@ -689,7 +691,7 @@ function openUpdate(uid,presetProject){
     '<div class="field"><label for="u-phase">Fase</label><select id="u-phase"'+ro+'><option value="">Sem fase</option>'+PHASES.map(f=>'<option'+(v.phase===f?' selected':'')+'>'+f+'</option>').join("")+'</select></div></div>'+
     '<div class="field"><label for="u-prog">Avanço do projeto (%)</label><div class="range"><input type="range" id="u-progr" min="0" max="100" step="5" value="'+(prog===""?0:prog)+'"'+ro+' aria-label="Avanço"><input type="number" id="u-prog" min="0" max="100" value="'+prog+'" placeholder="—"'+ro+'></div>'+
       (last&&isNum(last.progress)&&!u?'<span class="hint">Na última atualização estava em '+last.progress+'%.</span>':'')+'</div>'+
-    '<div class="field"><label for="u-done">O que foi feito</label><textarea id="u-done"'+ro+'>'+esc(v.done||"")+'</textarea>'+(!u?'<span class="hint">Já trouxe as tarefas do projeto concluídas nos últimos 7 dias. Ajuste à vontade.</span>':'')+'</div>'+
+    '<div class="field"><label for="u-done">O que foi feito</label><textarea id="u-done"'+ro+'>'+esc(v.done||"")+'</textarea>'+(!u?'<span class="hint">Preenchido sozinho com as tarefas do projeto concluídas nos últimos 7 dias, quando houver. Ajuste à vontade.</span>':'')+'</div>'+
     '<div class="field"><label for="u-next">Próximos passos</label><textarea id="u-next"'+ro+'>'+esc(v.next||"")+'</textarea></div>'+
     (u&&u.risks?'<div class="field"><label for="u-risks">Observações de risco (texto antigo)</label><textarea id="u-risks"'+ro+'>'+esc(u.risks)+'</textarea></div>':'')+
     '<div class="sub">Riscos e impedimentos do projeto</div><div id="u-rk"></div>'+
