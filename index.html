@@ -326,6 +326,7 @@ select.csel.on{border-color:var(--accent);color:var(--accent);font-weight:600}
     <div class="section-head">
       <h2>Situação dos projetos</h2>
       <span class="spacer"></span>
+      <select id="u-manager" class="csel" aria-label="Filtrar por gerente de projetos"></select>
       <select id="u-client" class="csel" aria-label="Filtrar projetos por cliente"></select>
       <button class="btn" id="btn-summary">Copiar resumo da semana</button>
       <button class="btn primary" id="new-update">+ Nova atualização</button>
@@ -377,7 +378,7 @@ const PRIO={alta:"Alta",media:"Média",baixa:"Baixa"};
 const PHASES=["Planejamento","Execução","Homologação","Go-live"];
 
 const S={tasks:[],projects:[],updates:[],risks:[],notifs:[],team:[],week:monday(new Date()),days:[0,1,2,3,4],backlog:true,
-  fPerson:"",fProject:"",hProject:"",blPerson:"",blProject:"",planning:null,fClient:"",me:"",mine:true,tab:"quadro",canWrite:true,db:null,uid:null,loaded:false};
+  fPerson:"",fProject:"",hProject:"",blPerson:"",blProject:"",planning:null,fClient:"",fManager:"",me:"",mine:true,tab:"quadro",canWrite:true,db:null,uid:null,loaded:false};
 
 /* ---------- utilidades ---------- */
 function pad(n){return String(n).padStart(2,"0")}
@@ -418,9 +419,9 @@ function col(name){return S.db.collection(name)}
 /* ---------- preferências (dias visíveis) ---------- */
 let prefTimer=null;
 function loadLocalPrefs(){try{const p=JSON.parse(localStorage.getItem("quadro.prefs")||"null");if(p){applyPrefs(p)}}catch(e){}}
-function applyPrefs(p){if(Array.isArray(p.days))S.days=p.days.filter(n=>n>=0&&n<=6);if(typeof p.backlog==="boolean")S.backlog=p.backlog;if(typeof p.me==="string")S.me=p.me;if(typeof p.mine==="boolean")S.mine=p.mine;if(typeof p.client==="string")S.fClient=p.client}
+function applyPrefs(p){if(Array.isArray(p.days))S.days=p.days.filter(n=>n>=0&&n<=6);if(typeof p.backlog==="boolean")S.backlog=p.backlog;if(typeof p.me==="string")S.me=p.me;if(typeof p.mine==="boolean")S.mine=p.mine;if(typeof p.client==="string")S.fClient=p.client;if(typeof p.manager==="string")S.fManager=p.manager}
 function savePrefs(){
-  const p={days:S.days,backlog:S.backlog,me:S.me,mine:S.mine,client:S.fClient};
+  const p={days:S.days,backlog:S.backlog,me:S.me,mine:S.mine,client:S.fClient,manager:S.fManager};
   try{localStorage.setItem("quadro.prefs",JSON.stringify(p))}catch(e){}
   clearTimeout(prefTimer);
   prefTimer=setTimeout(async()=>{if(S.db&&S.uid){try{await S.db.doc("prefs/"+S.uid).set(p)}catch(e){}}},800);
@@ -435,6 +436,16 @@ function renderDayChips(){
   box.innerHTML=h;
 }
 function clientList(){const c=[...new Set(S.projects.filter(p=>!p.archived).map(p=>(p.client||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR"));return {names:c,none:S.projects.some(p=>!p.archived&&!(p.client||"").trim())}}
+function projManagerOk(p){if(!S.fManager)return true;const m=p?(p.manager||"").trim():"";return S.fManager==="__none"?!m:m===S.fManager}
+function renderManagerSelect(){
+  const names=[...new Set(S.projects.filter(p=>!p.archived).map(p=>(p.manager||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+  const none=S.projects.some(p=>!p.archived&&!(p.manager||"").trim());
+  if(S.fManager&&S.fManager!=="__none"&&!names.includes(S.fManager))S.fManager="";
+  const el=$("u-manager");
+  el.innerHTML='<option value="">Todas as gerentes</option>'+names.map(m=>'<option'+(m===S.fManager?' selected':'')+'>GP: '+esc(m)+'</option>').join("")+(none?'<option value="__none">Sem gerente</option>':'');
+  [...el.options].forEach((o,i)=>{if(i>0&&i<=names.length)o.value=names[i-1]});
+  el.value=S.fManager;el.classList.toggle("on",!!S.fManager);el.hidden=!names.length;
+}
 function projClientOk(p){if(!S.fClient)return true;const c=p?(p.client||"").trim():"";return S.fClient==="__none"?!c:c===S.fClient}
 function taskClientOk(t){if(!S.fClient)return true;const p=S.projects.find(x=>x.id===t.project);if(!p)return S.fClient==="__none";return projClientOk(p)}
 function renderClientSelects(){
@@ -443,6 +454,7 @@ function renderClientSelects(){
   const h='<option value="">Todos os clientes</option>'+names.map(c=>'<option'+(c===S.fClient?' selected':'')+'>'+esc(c)+'</option>').join("")+(none?'<option value="__none"'+(S.fClient==="__none"?' selected':'')+'>Sem cliente</option>':'');
   ["f-client","bl-client","u-client"].forEach(id=>{const el=$(id);el.innerHTML=h;el.value=S.fClient;el.classList.toggle("on",!!S.fClient);el.hidden=!names.length});
 }
+$("u-manager").onchange=e=>{S.fManager=e.target.value;if(S.hProject&&!projManagerOk(S.projects.find(p=>p.id===S.hProject)))S.hProject="";savePrefs();renderAll()};
 ["f-client","bl-client","u-client"].forEach(id=>{$(id).onchange=e=>{S.fClient=e.target.value;
   if(S.fProject&&!projClientOk(S.projects.find(p=>p.id===S.fProject)))S.fProject="";
   if(S.blProject&&!projClientOk(S.projects.find(p=>p.id===S.blProject)))S.blProject="";
@@ -542,9 +554,9 @@ function renderReminder(){
   const rb=$("remind-board");rb.hidden=!(pend.length&&(wd===4||wd===5||wd===6||wd===0));rb.innerHTML=txt+' <span style="margin-left:auto;color:var(--accent);font-weight:700">Atualizar agora ›</span>';
 }
 function renderProjects(){
-  const projs=S.projects.filter(p=>!p.archived&&projClientOk(p)).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
+  const projs=S.projects.filter(p=>!p.archived&&projClientOk(p)&&projManagerOk(p)).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
   const td=today();
-  if(!projs.length){$("pgrid").innerHTML='<div class="empty">'+(S.fClient?'Nenhum projeto deste cliente.':'Nenhum projeto cadastrado ainda. Cadastre em “Equipe e projetos” ou direto na primeira atualização.')+'</div>';return}
+  if(!projs.length){$("pgrid").innerHTML='<div class="empty">'+(S.fClient||S.fManager?'Nenhum projeto com esses filtros.':'Nenhum projeto cadastrado ainda. Cadastre em “Equipe e projetos” ou direto na primeira atualização.')+'</div>';return}
   const byClient={};projs.forEach(p=>{const c=(p.client||"").trim()||"Sem cliente";(byClient[c]=byClient[c]||[]).push(p)});
   const cnames=Object.keys(byClient).sort((a,b)=>a==="Sem cliente"?1:b==="Sem cliente"?-1:a.localeCompare(b,"pt-BR"));
   const card=p=>{
@@ -575,9 +587,9 @@ function renderProjects(){
   $("pgrid").innerHTML=cnames.map(c=>(multi?'<div class="cgroup">'+esc(c)+' <span>'+byClient[c].length+' projeto'+(byClient[c].length>1?'s':'')+'</span></div>':'')+'<div class="grid">'+byClient[c].map(card).join("")+'</div>').join("");
 }
 function renderHistory(){
-  const all=S.projects.filter(p=>projClientOk(p)).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
+  const all=S.projects.filter(p=>projClientOk(p)&&projManagerOk(p)).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
   $("h-project").innerHTML='<option value="">Todos os projetos</option>'+all.map(p=>'<option value="'+esc(p.id)+'"'+(p.id===S.hProject?' selected':'')+'>'+esc(p.name)+'</option>').join("");
-  const list=S.updates.filter(u=>(!S.hProject||u.projectId===S.hProject)&&projClientOk(S.projects.find(p=>p.id===u.projectId))).sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0));
+  const list=S.updates.filter(u=>(!S.hProject||u.projectId===S.hProject)&&projClientOk(S.projects.find(p=>p.id===u.projectId))&&projManagerOk(S.projects.find(p=>p.id===u.projectId))).sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0));
   if(!list.length){$("hist").innerHTML='<div class="empty">'+(S.loaded?'Nenhuma atualização registrada.':'Carregando…')+'</div>';return}
   $("hist").innerHTML=list.map(u=>{
     let dl="";
@@ -716,7 +728,7 @@ blist.addEventListener("keydown",async e=>{
 });
 
 function renderAll(){
-  renderClientSelects();renderDayChips();renderFilters();renderBoard();renderProjects();renderHistory();renderReminder();renderBell();
+  renderClientSelects();renderManagerSelect();renderDayChips();renderFilters();renderBoard();renderProjects();renderHistory();renderReminder();renderBell();
   {const ae=document.activeElement;const busy=ae&&ae.closest&&ae.closest("#blist")&&((S.planning&&ae.closest(".bplan"))||(ae.matches("[data-bladd]")&&ae.value));if(!busy)renderBacklog()}
   $("new-update").hidden=!S.canWrite;
   if(S.riskRefresh)S.riskRefresh();
@@ -1001,9 +1013,9 @@ function openRiskModal(pid){
 
 function weekSummary(){
   const mon=monday(new Date()),sun=addDays(mon,6),td=today();
-  const cl=S.fClient?(S.fClient==="__none"?"projetos sem cliente":S.fClient):"";
+  const cl=[S.fClient?(S.fClient==="__none"?"projetos sem cliente":S.fClient):"",S.fManager?(S.fManager==="__none"?"sem gerente":"GP "+S.fManager):""].filter(Boolean).join(" · ");
   const lines=["Resumo semanal de projetos"+(cl?" · "+cl:"")+" · semana de "+brShort(iso(mon))+" a "+br(iso(sun)),""];
-  const projs=S.projects.filter(p=>!p.archived&&projClientOk(p)).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
+  const projs=S.projects.filter(p=>!p.archived&&projClientOk(p)&&projManagerOk(p)).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
   const counts={};projs.forEach(p=>{const u=latestUpdate(p.id);const k=u&&u.status?STATUS[u.status]:"Sem status";counts[k]=(counts[k]||0)+1});
   lines.push("Visão geral: "+Object.entries(counts).map(([k,n])=>n+" "+k.toLowerCase()).join(" · "));
   projs.forEach(p=>{
