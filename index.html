@@ -198,6 +198,24 @@ textarea.summary{min-height:300px;font-family:var(--font-body);font-size:13.5px}
 .nt .nw{font-size:12px;color:var(--muted);margin-top:2px}
 .nt.alert .dotn{background:var(--hi)}
 .bp-empty{padding:18px 14px;color:var(--muted);font-size:14px}
+.bl-count{color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums}
+.blist{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;align-items:start}
+.bgroup{background:var(--surface);border:1px solid var(--line);border-top:3px solid var(--rose);border-radius:12px;overflow:hidden}
+.bg-head{display:flex;align-items:baseline;gap:8px;padding:12px 14px 8px}
+.bg-head h3{font-size:16px;flex:1;min-width:0;overflow-wrap:anywhere}
+.bg-head .n{font-size:12px;color:var(--muted);background:var(--col);border-radius:99px;padding:1px 8px}
+.bitem{border-top:1px solid var(--line);padding:9px 14px;display:flex;gap:9px;align-items:flex-start}
+.bitem .chk{margin-top:3px;width:16px;height:16px;accent-color:var(--accent);flex:none}
+.bitem .bt{flex:1;min-width:0;cursor:pointer}
+.bitem .bt .t{font-weight:600;overflow-wrap:anywhere}
+.bitem .pbar{width:4px;align-self:stretch;border-radius:2px;background:var(--line);flex:none}
+.bitem .pbar.alta{background:var(--hi)}.bitem .pbar.media{background:var(--md)}.bitem .pbar.baixa{background:var(--lo)}
+.bplan{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px;padding:8px 14px 10px;background:var(--accent-soft);border-top:1px solid var(--line)}
+.bplan input{min-width:0;width:100%}
+.bplan .acts{grid-column:1/-1;display:flex;gap:6px;justify-content:flex-end}
+.bg-add{border-top:1px solid var(--line);padding:8px 10px}
+.bg-add input{width:100%;border-style:dashed;background:transparent}
+.bg-add input:focus{background:var(--surface);border-style:solid}
 /* Modal */
 .overlay{position:fixed;inset:0;background:rgba(10,14,22,.45);display:none;align-items:flex-start;justify-content:center;padding:6vh 12px;z-index:20;overflow-y:auto}
 .overlay.show{display:flex}
@@ -250,6 +268,7 @@ textarea.summary{min-height:300px;font-family:var(--font-body);font-size:13.5px}
     <div class="brand"><img src="logo.png" alt="Porto iT" width="132" height="30"><span class="sep"></span><span class="area">Projetos</span><h1 class="sr">Quadro de Projetos</h1></div>
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" id="tab-quadro" aria-selected="true">Quadro</button>
+      <button class="tab" role="tab" id="tab-backlog" aria-selected="false">Backlog</button>
       <button class="tab" role="tab" id="tab-atualizacoes" aria-selected="false">Atualizações semanais</button>
     </div>
     <div class="bell-wrap"><button class="icon-btn bell" id="btn-bell" aria-label="Notificações" aria-expanded="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3h-16a4 4 0 0 0 2-3v-3a7 7 0 0 1 4-6"/><path d="M9 17v1a3 3 0 0 0 6 0v-1"/></svg><span class="badge" id="bell-badge" hidden>0</span></button><div class="bell-panel" id="bell-panel" hidden></div></div>
@@ -281,6 +300,18 @@ textarea.summary{min-height:300px;font-family:var(--font-body);font-size:13.5px}
       </div>
     </div>
     <div class="board" id="board"></div>
+  </section>
+
+  <section id="view-backlog" hidden>
+    <div class="section-head">
+      <h2>Backlog</h2>
+      <span class="bl-count" id="bl-count"></span>
+      <span class="spacer"></span>
+      <select id="bl-person" aria-label="Filtrar backlog por pessoa"></select>
+      <select id="bl-project" aria-label="Filtrar backlog por projeto"></select>
+    </div>
+    <p class="hint" style="margin:-4px 0 14px">Tudo o que ainda não tem dia. Use “Planejar” para escolher o dia e levar o item para o quadro.</p>
+    <div class="blist" id="blist"></div>
   </section>
 
   <section id="view-atualizacoes" hidden>
@@ -338,7 +369,7 @@ const PRIO={alta:"Alta",media:"Média",baixa:"Baixa"};
 const PHASES=["Planejamento","Execução","Homologação","Go-live"];
 
 const S={tasks:[],projects:[],updates:[],risks:[],notifs:[],team:[],week:monday(new Date()),days:[0,1,2,3,4],backlog:true,
-  fPerson:"",fProject:"",hProject:"",me:"",mine:true,tab:"quadro",canWrite:true,db:null,uid:null,loaded:false};
+  fPerson:"",fProject:"",hProject:"",blPerson:"",blProject:"",planning:null,me:"",mine:true,tab:"quadro",canWrite:true,db:null,uid:null,loaded:false};
 
 /* ---------- utilidades ---------- */
 function pad(n){return String(n).padStart(2,"0")}
@@ -509,7 +540,7 @@ function renderProjects(){
       (rk.length?'<div class="rk">'+rk.length+' risco'+(rk.length>1?'s':'')+' aberto'+(rk.length>1?'s':'')+(rkLate?' · '+rkLate+' com prazo vencido':'')+'</div>':'')+
       '<div class="line">'+(u?'Última atualização: '+br(u.date)+(u.author?' · '+esc(u.author):''):'Ainda não teve atualização')+'</div>'+
       (stale&&!(u&&u.status==="done")?'<div class="stale">'+(u?'Sem atualização há '+age+' dias':'Precisa da primeira atualização')+'</div>':'')+
-      '<div class="line">'+open+' tarefa'+(open===1?'':'s')+' em aberto no quadro</div>'+
+      '<div class="line">'+open+' tarefa'+(open===1?'':'s')+' em aberto'+(()=>{const b=S.tasks.filter(t=>t.project===p.id&&!t.done&&!t.day).length;return b?' · '+b+' no backlog':''})()+'</div>'+
       '<div class="pbtns">'+(S.canWrite?'<button class="btn small primary" data-upd="'+esc(p.id)+'">Atualizar</button>':'')+
         '<button class="btn small" data-proj="'+esc(p.id)+'">Dados do projeto</button>'+
         '<button class="btn small" data-risk="'+esc(p.id)+'">Riscos</button></div>'+
@@ -590,8 +621,76 @@ $("btn-bell").onclick=e=>{e.stopPropagation();$("bell-panel").hidden?openBell():
 document.addEventListener("click",e=>{if(!$("bell-panel").hidden&&!e.target.closest(".bell-wrap"))closeBell()});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("bell-panel").hidden)closeBell()});
 
+/* ---------- backlog ---------- */
+const PRANK={alta:0,media:1,baixa:2};
+function renderBacklog(){
+  const people=[...new Set([...S.team,...S.tasks.map(t=>t.owner).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+  $("bl-person").innerHTML='<option value="">Todas as pessoas</option><option value="__none"'+(S.blPerson==="__none"?' selected':'')+'>Sem responsável</option>'+people.map(p=>'<option'+(p===S.blPerson?' selected':'')+'>'+esc(p)+'</option>').join("");
+  const projs=S.projects.filter(p=>!p.archived).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
+  $("bl-project").innerHTML='<option value="">Todos os projetos</option>'+projs.map(p=>'<option value="'+esc(p.id)+'"'+(p.id===S.blProject?' selected':'')+'>'+esc(p.name)+'</option>').join("");
+  const items=S.tasks.filter(t=>!t.day&&!t.done).filter(t=>!S.blPerson||(S.blPerson==="__none"?!t.owner:t.owner===S.blPerson));
+  const sortB=(a,b)=>((PRANK[a.priority]??3)-(PRANK[b.priority]??3))||((a.due||"9").localeCompare(b.due||"9"))||((a.order||0)-(b.order||0));
+  const groups=projs.filter(p=>!S.blProject||p.id===S.blProject).map(p=>({id:p.id,name:p.name,client:p.client,list:items.filter(t=>t.project===p.id).sort(sortB)}));
+  if(!S.blProject){const orphan=items.filter(t=>!t.project||!projs.some(p=>p.id===t.project)).sort(sortB);groups.push({id:"",name:"Sem projeto",list:orphan})}
+  const total=groups.reduce((n,g)=>n+g.list.length,0);
+  $("bl-count").textContent=total+" ite"+(total===1?"m":"ns");
+  const td=today();
+  $("blist").innerHTML=groups.map(g=>'<div class="bgroup"><div class="bg-head"><h3>'+esc(g.name)+'</h3><span class="n">'+g.list.length+'</span></div>'+
+    g.list.map(t=>{
+      const c=t.owner?pColor(t.owner):"";
+      let meta="";
+      if(t.owner)meta+='<span class="tag'+(c?' who" style="--pc:'+c:'')+'">'+esc(t.owner)+'</span>';
+      if(t.priority)meta+='<span class="tag">'+esc(PRIO[t.priority])+'</span>';
+      if(t.due)meta+='<span class="tag'+(t.due<td?' late':'')+'">Prazo '+brShort(t.due)+'</span>';
+      const planning=S.planning===t.id;
+      return '<div class="bitem" data-id="'+esc(t.id)+'"><span class="pbar '+esc(t.priority||"")+'"></span>'+
+        '<input type="checkbox" class="chk" aria-label="Marcar como concluída"'+(S.canWrite?'':' disabled')+'>'+
+        '<div class="bt" tabindex="0"><div class="t">'+esc(t.title)+'</div>'+(meta?'<div class="meta">'+meta+'</div>':'')+'</div>'+
+        (S.canWrite&&!planning?'<button class="btn small" data-plan="'+esc(t.id)+'">Planejar</button>':'')+'</div>'+
+        (planning?'<div class="bplan"><input type="date" id="pl-day" value="'+td+'" aria-label="Dia no quadro"><input type="text" id="pl-owner" list="dl-team-bl" value="'+esc(t.owner||S.me||"")+'" placeholder="Responsável (opcional)" aria-label="Responsável">'+teamList("dl-team-bl")+
+          '<div class="acts"><button class="btn small" data-plancancel>Cancelar</button><button class="btn small primary" data-planok="'+esc(t.id)+'">Levar para o quadro</button></div></div>':'');
+    }).join("")+
+    (g.list.length?'':'<div class="bitem"><span class="hint">Nada no backlog deste projeto.</span></div>')+
+    (S.canWrite?'<div class="bg-add"><input type="text" placeholder="+ Adicionar ao backlog" aria-label="Adicionar ao backlog de '+esc(g.name)+'" data-bladd="'+esc(g.id)+'"></div>':'')+
+  '</div>').join("");
+}
+$("bl-person").onchange=e=>{S.blPerson=e.target.value;renderBacklog()};
+$("bl-project").onchange=e=>{S.blProject=e.target.value;renderBacklog()};
+const blist=$("blist");
+blist.addEventListener("click",async e=>{
+  const chk=e.target.closest(".chk");
+  if(chk){const id=chk.closest(".bitem").dataset.id;write(()=>col("tasks").doc(id).update({done:true,doneAt:Date.now()}));return}
+  const pl=e.target.closest("[data-plan]");if(pl){S.planning=pl.dataset.plan;renderBacklog();const d=$("pl-day");if(d)d.focus();return}
+  if(e.target.closest("[data-plancancel]")){S.planning=null;renderBacklog();return}
+  const ok=e.target.closest("[data-planok]");
+  if(ok){
+    const id=ok.dataset.planok,t=S.tasks.find(x=>x.id===id);if(!t)return;
+    const day=$("pl-day").value;if(!day){$("pl-day").focus();return}
+    const owner=$("pl-owner").value.trim();
+    if(await write(()=>col("tasks").doc(id).update({day,owner,order:Date.now()}))){
+      if(owner&&owner!==(t.owner||""))notify(owner,(S.me||"Alguém")+" planejou uma tarefa para você: "+t.title+" ("+brShort(day)+")",{type:"task",id});
+      S.planning=null;banner("“"+t.title+"” foi para o quadro em "+br(day)+".");renderBacklog();
+    }
+    return;
+  }
+  const bt=e.target.closest(".bt");if(bt)openTask(bt.closest(".bitem").dataset.id);
+});
+blist.addEventListener("keydown",async e=>{
+  const inp=e.target.closest("[data-bladd]");
+  if(inp&&e.key==="Enter"){
+    const title=inp.value.trim();if(!title)return;
+    const project=inp.dataset.bladd||"";inp.value="";
+    const data={title,day:null,owner:S.blPerson&&S.blPerson!=="__none"?S.blPerson:"",project,priority:"",due:"",notes:"",done:false,order:Date.now(),createdAt:Date.now()};
+    await write(()=>col("tasks").add(data));
+    const again=blist.querySelector('[data-bladd="'+project+'"]');if(again)again.focus();
+    return;
+  }
+  const bt=e.target.closest(".bt");if(bt&&e.key==="Enter")openTask(bt.closest(".bitem").dataset.id);
+});
+
 function renderAll(){
   renderDayChips();renderFilters();renderBoard();renderProjects();renderHistory();renderReminder();renderBell();
+  {const ae=document.activeElement;const busy=ae&&ae.closest&&ae.closest("#blist")&&((S.planning&&ae.closest(".bplan"))||(ae.matches("[data-bladd]")&&ae.value));if(!busy)renderBacklog()}
   $("new-update").hidden=!S.canWrite;
   if(S.riskRefresh)S.riskRefresh();
 }
@@ -599,15 +698,13 @@ function renderAll(){
 /* ---------- abas ---------- */
 function setTab(t){
   S.tab=t;
-  $("tab-quadro").setAttribute("aria-selected",t==="quadro");
-  $("tab-atualizacoes").setAttribute("aria-selected",t==="atualizacoes");
-  $("view-quadro").hidden=t!=="quadro";
-  $("view-atualizacoes").hidden=t!=="atualizacoes";
+  ["quadro","backlog","atualizacoes"].forEach(k=>{$("tab-"+k).setAttribute("aria-selected",t===k);$("view-"+k).hidden=t!==k});
   if(location.hash!=="#"+t){try{history.replaceState(null,"","#"+t)}catch(e){location.hash=t}}
 }
 $("tab-quadro").onclick=()=>setTab("quadro");
 $("tab-atualizacoes").onclick=()=>setTab("atualizacoes");
-window.addEventListener("hashchange",()=>{const h=location.hash.slice(1);if(h==="quadro"||h==="atualizacoes")setTab(h)});
+$("tab-backlog").onclick=()=>setTab("backlog");
+window.addEventListener("hashchange",()=>{const h=location.hash.slice(1);if(h==="quadro"||h==="atualizacoes"||h==="backlog")setTab(h)});
 
 /* ---------- eventos do quadro ---------- */
 $("prev").onclick=()=>{S.week=addDays(S.week,-7);renderBoard()};
@@ -995,7 +1092,7 @@ function startData(db){
 }
 async function init(){
   loadLocalPrefs();
-  const h=location.hash.slice(1);setTab(h==="atualizacoes"?"atualizacoes":"quadro");
+  const h=location.hash.slice(1);setTab(h==="atualizacoes"||h==="backlog"?h:"quadro");
   renderAll();
   if(!firebaseConfig){S.loaded=true;banner("Quadro ainda não configurado.",true);renderAll();return}
   const app=initializeApp(firebaseConfig);
