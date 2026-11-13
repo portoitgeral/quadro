@@ -216,6 +216,11 @@ textarea.summary{min-height:300px;font-family:var(--font-body);font-size:13.5px}
 .bg-add{border-top:1px solid var(--line);padding:8px 10px}
 .bg-add input{width:100%;border-style:dashed;background:transparent}
 .bg-add input:focus{background:var(--surface);border-style:solid}
+.cgroup{display:flex;align-items:baseline;gap:8px;margin:4px 0 10px;font-family:var(--font-display);font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--rose)}
+.cgroup::after{content:"";flex:1;height:1px;background:var(--line)}
+.cgroup span{color:var(--muted);font-weight:500;letter-spacing:0;text-transform:none}
+.bg-head .cl{display:block;font-size:12px;color:var(--muted);font-family:var(--font-body);font-weight:600;margin-top:2px}
+select.csel.on{border-color:var(--accent);color:var(--accent);font-weight:600}
 /* Modal */
 .overlay{position:fixed;inset:0;background:rgba(10,14,22,.45);display:none;align-items:flex-start;justify-content:center;padding:6vh 12px;z-index:20;overflow-y:auto}
 .overlay.show{display:flex}
@@ -296,6 +301,7 @@ textarea.summary{min-height:300px;font-family:var(--font-body);font-size:13.5px}
         </div>
         <select id="me" aria-label="Eu sou"></select>
         <select id="f-person" aria-label="Filtrar por pessoa"></select>
+        <select id="f-client" class="csel" aria-label="Filtrar por cliente"></select>
         <select id="f-project" aria-label="Filtrar por projeto"></select>
       </div>
     </div>
@@ -308,6 +314,7 @@ textarea.summary{min-height:300px;font-family:var(--font-body);font-size:13.5px}
       <span class="bl-count" id="bl-count"></span>
       <span class="spacer"></span>
       <select id="bl-person" aria-label="Filtrar backlog por pessoa"></select>
+      <select id="bl-client" class="csel" aria-label="Filtrar backlog por cliente"></select>
       <select id="bl-project" aria-label="Filtrar backlog por projeto"></select>
     </div>
     <p class="hint" style="margin:-4px 0 14px">Tudo o que ainda não tem dia. Use “Planejar” para escolher o dia e levar o item para o quadro.</p>
@@ -319,10 +326,11 @@ textarea.summary{min-height:300px;font-family:var(--font-body);font-size:13.5px}
     <div class="section-head">
       <h2>Situação dos projetos</h2>
       <span class="spacer"></span>
+      <select id="u-client" class="csel" aria-label="Filtrar projetos por cliente"></select>
       <button class="btn" id="btn-summary">Copiar resumo da semana</button>
       <button class="btn primary" id="new-update">+ Nova atualização</button>
     </div>
-    <div class="grid" id="pgrid"></div>
+    <div id="pgrid"></div>
     <div class="section-head">
       <h2>Histórico de atualizações</h2>
       <span class="spacer"></span>
@@ -369,7 +377,7 @@ const PRIO={alta:"Alta",media:"Média",baixa:"Baixa"};
 const PHASES=["Planejamento","Execução","Homologação","Go-live"];
 
 const S={tasks:[],projects:[],updates:[],risks:[],notifs:[],team:[],week:monday(new Date()),days:[0,1,2,3,4],backlog:true,
-  fPerson:"",fProject:"",hProject:"",blPerson:"",blProject:"",planning:null,me:"",mine:true,tab:"quadro",canWrite:true,db:null,uid:null,loaded:false};
+  fPerson:"",fProject:"",hProject:"",blPerson:"",blProject:"",planning:null,fClient:"",me:"",mine:true,tab:"quadro",canWrite:true,db:null,uid:null,loaded:false};
 
 /* ---------- utilidades ---------- */
 function pad(n){return String(n).padStart(2,"0")}
@@ -410,9 +418,9 @@ function col(name){return S.db.collection(name)}
 /* ---------- preferências (dias visíveis) ---------- */
 let prefTimer=null;
 function loadLocalPrefs(){try{const p=JSON.parse(localStorage.getItem("quadro.prefs")||"null");if(p){applyPrefs(p)}}catch(e){}}
-function applyPrefs(p){if(Array.isArray(p.days))S.days=p.days.filter(n=>n>=0&&n<=6);if(typeof p.backlog==="boolean")S.backlog=p.backlog;if(typeof p.me==="string")S.me=p.me;if(typeof p.mine==="boolean")S.mine=p.mine}
+function applyPrefs(p){if(Array.isArray(p.days))S.days=p.days.filter(n=>n>=0&&n<=6);if(typeof p.backlog==="boolean")S.backlog=p.backlog;if(typeof p.me==="string")S.me=p.me;if(typeof p.mine==="boolean")S.mine=p.mine;if(typeof p.client==="string")S.fClient=p.client}
 function savePrefs(){
-  const p={days:S.days,backlog:S.backlog,me:S.me,mine:S.mine};
+  const p={days:S.days,backlog:S.backlog,me:S.me,mine:S.mine,client:S.fClient};
   try{localStorage.setItem("quadro.prefs",JSON.stringify(p))}catch(e){}
   clearTimeout(prefTimer);
   prefTimer=setTimeout(async()=>{if(S.db&&S.uid){try{await S.db.doc("prefs/"+S.uid).set(p)}catch(e){}}},800);
@@ -426,6 +434,20 @@ function renderDayChips(){
   DAYS.forEach((d,i)=>{h+='<button class="chip" data-chip="'+i+'" aria-pressed="'+S.days.includes(i)+'">'+d+'</button>'});
   box.innerHTML=h;
 }
+function clientList(){const c=[...new Set(S.projects.filter(p=>!p.archived).map(p=>(p.client||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR"));return {names:c,none:S.projects.some(p=>!p.archived&&!(p.client||"").trim())}}
+function projClientOk(p){if(!S.fClient)return true;const c=p?(p.client||"").trim():"";return S.fClient==="__none"?!c:c===S.fClient}
+function taskClientOk(t){if(!S.fClient)return true;const p=S.projects.find(x=>x.id===t.project);if(!p)return S.fClient==="__none";return projClientOk(p)}
+function renderClientSelects(){
+  const {names,none}=clientList();
+  if(S.fClient&&S.fClient!=="__none"&&!names.includes(S.fClient))S.fClient="";
+  const h='<option value="">Todos os clientes</option>'+names.map(c=>'<option'+(c===S.fClient?' selected':'')+'>'+esc(c)+'</option>').join("")+(none?'<option value="__none"'+(S.fClient==="__none"?' selected':'')+'>Sem cliente</option>':'');
+  ["f-client","bl-client","u-client"].forEach(id=>{const el=$(id);el.innerHTML=h;el.value=S.fClient;el.classList.toggle("on",!!S.fClient);el.hidden=!names.length});
+}
+["f-client","bl-client","u-client"].forEach(id=>{$(id).onchange=e=>{S.fClient=e.target.value;
+  if(S.fProject&&!projClientOk(S.projects.find(p=>p.id===S.fProject)))S.fProject="";
+  if(S.blProject&&!projClientOk(S.projects.find(p=>p.id===S.blProject)))S.blProject="";
+  if(S.hProject&&!projClientOk(S.projects.find(p=>p.id===S.hProject)))S.hProject="";
+  savePrefs();renderAll()}});
 function renderFilters(){
   const people=[...new Set([...S.team,...S.tasks.map(t=>t.owner).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,"pt-BR"));
   $("f-person").innerHTML='<option value="">Todas as pessoas</option>'+people.map(p=>'<option'+(p===S.fPerson?' selected':'')+'>'+esc(p)+'</option>').join("");
@@ -437,13 +459,14 @@ function renderFilters(){
   $("v-mine").setAttribute("aria-pressed",S.mine);
   $("v-team").setAttribute("aria-pressed",!S.mine);
   $("f-person").hidden=S.mine&&!!S.me;
-  const projs=S.projects.filter(p=>!p.archived);
+  const projs=S.projects.filter(p=>!p.archived&&projClientOk(p)).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
   $("f-project").innerHTML='<option value="">Todos os projetos</option>'+projs.map(p=>'<option value="'+esc(p.id)+'"'+(p.id===S.fProject?' selected':'')+'>'+esc(p.name)+'</option>').join("");
 }
 function visible(t){
   if(S.mine&&S.me){if(t.owner!==S.me)return false}
   else if(S.fPerson&&t.owner!==S.fPerson)return false;
   if(S.fProject&&t.project!==S.fProject)return false;
+  if(!taskClientOk(t))return false;
   return true;
 }
 function sortTasks(a,b){return (a.order||0)-(b.order||0)}
@@ -519,10 +542,12 @@ function renderReminder(){
   const rb=$("remind-board");rb.hidden=!(pend.length&&(wd===4||wd===5||wd===6||wd===0));rb.innerHTML=txt+' <span style="margin-left:auto;color:var(--accent);font-weight:700">Atualizar agora ›</span>';
 }
 function renderProjects(){
-  const projs=S.projects.filter(p=>!p.archived).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
+  const projs=S.projects.filter(p=>!p.archived&&projClientOk(p)).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
   const td=today();
-  if(!projs.length){$("pgrid").innerHTML='<div class="empty">Nenhum projeto cadastrado ainda. Cadastre em “Equipe e projetos” ou direto na primeira atualização.</div>';return}
-  $("pgrid").innerHTML=projs.map(p=>{
+  if(!projs.length){$("pgrid").innerHTML='<div class="empty">'+(S.fClient?'Nenhum projeto deste cliente.':'Nenhum projeto cadastrado ainda. Cadastre em “Equipe e projetos” ou direto na primeira atualização.')+'</div>';return}
+  const byClient={};projs.forEach(p=>{const c=(p.client||"").trim()||"Sem cliente";(byClient[c]=byClient[c]||[]).push(p)});
+  const cnames=Object.keys(byClient).sort((a,b)=>a==="Sem cliente"?1:b==="Sem cliente"?-1:a.localeCompare(b,"pt-BR"));
+  const card=p=>{
     const u=latestUpdate(p.id);
     const open=S.tasks.filter(t=>t.project===p.id&&!t.done).length;
     const age=u?daysBetween(u.date,td):null;
@@ -545,12 +570,14 @@ function renderProjects(){
         '<button class="btn small" data-proj="'+esc(p.id)+'">Dados do projeto</button>'+
         '<button class="btn small" data-risk="'+esc(p.id)+'">Riscos</button></div>'+
     '</div>';
-  }).join("");
+  };
+  const multi=cnames.length>1||cnames[0]!=="Sem cliente";
+  $("pgrid").innerHTML=cnames.map(c=>(multi?'<div class="cgroup">'+esc(c)+' <span>'+byClient[c].length+' projeto'+(byClient[c].length>1?'s':'')+'</span></div>':'')+'<div class="grid">'+byClient[c].map(card).join("")+'</div>').join("");
 }
 function renderHistory(){
-  const all=S.projects.slice().sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
+  const all=S.projects.filter(p=>projClientOk(p)).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
   $("h-project").innerHTML='<option value="">Todos os projetos</option>'+all.map(p=>'<option value="'+esc(p.id)+'"'+(p.id===S.hProject?' selected':'')+'>'+esc(p.name)+'</option>').join("");
-  const list=S.updates.filter(u=>!S.hProject||u.projectId===S.hProject).sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0));
+  const list=S.updates.filter(u=>(!S.hProject||u.projectId===S.hProject)&&projClientOk(S.projects.find(p=>p.id===u.projectId))).sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0));
   if(!list.length){$("hist").innerHTML='<div class="empty">'+(S.loaded?'Nenhuma atualização registrada.':'Carregando…')+'</div>';return}
   $("hist").innerHTML=list.map(u=>{
     let dl="";
@@ -626,16 +653,16 @@ const PRANK={alta:0,media:1,baixa:2};
 function renderBacklog(){
   const people=[...new Set([...S.team,...S.tasks.map(t=>t.owner).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,"pt-BR"));
   $("bl-person").innerHTML='<option value="">Todas as pessoas</option><option value="__none"'+(S.blPerson==="__none"?' selected':'')+'>Sem responsável</option>'+people.map(p=>'<option'+(p===S.blPerson?' selected':'')+'>'+esc(p)+'</option>').join("");
-  const projs=S.projects.filter(p=>!p.archived).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
+  const projs=S.projects.filter(p=>!p.archived&&projClientOk(p)).sort((a,b)=>((a.client||"~").localeCompare(b.client||"~","pt-BR"))||a.name.localeCompare(b.name,"pt-BR"));
   $("bl-project").innerHTML='<option value="">Todos os projetos</option>'+projs.map(p=>'<option value="'+esc(p.id)+'"'+(p.id===S.blProject?' selected':'')+'>'+esc(p.name)+'</option>').join("");
   const items=S.tasks.filter(t=>!t.day&&!t.done).filter(t=>!S.blPerson||(S.blPerson==="__none"?!t.owner:t.owner===S.blPerson));
   const sortB=(a,b)=>((PRANK[a.priority]??3)-(PRANK[b.priority]??3))||((a.due||"9").localeCompare(b.due||"9"))||((a.order||0)-(b.order||0));
   const groups=projs.filter(p=>!S.blProject||p.id===S.blProject).map(p=>({id:p.id,name:p.name,client:p.client,list:items.filter(t=>t.project===p.id).sort(sortB)}));
-  if(!S.blProject){const orphan=items.filter(t=>!t.project||!projs.some(p=>p.id===t.project)).sort(sortB);groups.push({id:"",name:"Sem projeto",list:orphan})}
+  if(!S.blProject&&(!S.fClient||S.fClient==="__none")){const orphan=items.filter(t=>!t.project||!projs.some(p=>p.id===t.project)).sort(sortB);groups.push({id:"",name:"Sem projeto",list:orphan})}
   const total=groups.reduce((n,g)=>n+g.list.length,0);
   $("bl-count").textContent=total+" ite"+(total===1?"m":"ns");
   const td=today();
-  $("blist").innerHTML=groups.map(g=>'<div class="bgroup"><div class="bg-head"><h3>'+esc(g.name)+'</h3><span class="n">'+g.list.length+'</span></div>'+
+  $("blist").innerHTML=groups.map(g=>'<div class="bgroup"><div class="bg-head"><h3>'+esc(g.name)+(g.client?'<span class="cl">'+esc(g.client)+'</span>':'')+'</h3><span class="n">'+g.list.length+'</span></div>'+
     g.list.map(t=>{
       const c=t.owner?pColor(t.owner):"";
       let meta="";
@@ -689,7 +716,7 @@ blist.addEventListener("keydown",async e=>{
 });
 
 function renderAll(){
-  renderDayChips();renderFilters();renderBoard();renderProjects();renderHistory();renderReminder();renderBell();
+  renderClientSelects();renderDayChips();renderFilters();renderBoard();renderProjects();renderHistory();renderReminder();renderBell();
   {const ae=document.activeElement;const busy=ae&&ae.closest&&ae.closest("#blist")&&((S.planning&&ae.closest(".bplan"))||(ae.matches("[data-bladd]")&&ae.value));if(!busy)renderBacklog()}
   $("new-update").hidden=!S.canWrite;
   if(S.riskRefresh)S.riskRefresh();
@@ -933,7 +960,7 @@ function openProject(pid){
   const reps=Array.isArray(p.replans)?p.replans:[];
   openModal('<h2>Dados do projeto</h2><form id="pform">'+
     '<div class="field"><label for="p-name">Nome do projeto</label><input type="text" id="p-name" required value="'+esc(p.name)+'"'+ro+'></div>'+
-    '<div class="two"><div class="field"><label for="p-client">Cliente</label><input type="text" id="p-client" value="'+esc(p.client||"")+'"'+ro+'></div>'+
+    '<div class="two"><div class="field"><label for="p-client">Cliente</label><input type="text" id="p-client" list="dl-clients" value="'+esc(p.client||"")+'"'+ro+'><datalist id="dl-clients">'+clientList().names.map(c=>'<option value="'+esc(c)+'">').join("")+'</datalist><span class="hint">Escreva sempre do mesmo jeito para agrupar certo.</span></div>'+
     '<div class="field"><label for="p-manager">Gerente do projeto</label><input type="text" id="p-manager" list="dl-team-p" value="'+esc(p.manager||"")+'"'+ro+'>'+teamList("dl-team-p")+'</div></div>'+
     '<div class="two"><div class="field"><label for="p-start">Início</label><input type="date" id="p-start" value="'+esc(p.start||"")+'"'+ro+'></div>'+
     '<div class="field"><label for="p-golive">Go-live previsto</label><input type="date" id="p-golive" value="'+esc(p.goLive||"")+'"'+ro+'></div></div>'+
@@ -974,8 +1001,9 @@ function openRiskModal(pid){
 
 function weekSummary(){
   const mon=monday(new Date()),sun=addDays(mon,6),td=today();
-  const lines=["Resumo semanal de projetos · semana de "+brShort(iso(mon))+" a "+br(iso(sun)),""];
-  const projs=S.projects.filter(p=>!p.archived).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
+  const cl=S.fClient?(S.fClient==="__none"?"projetos sem cliente":S.fClient):"";
+  const lines=["Resumo semanal de projetos"+(cl?" · "+cl:"")+" · semana de "+brShort(iso(mon))+" a "+br(iso(sun)),""];
+  const projs=S.projects.filter(p=>!p.archived&&projClientOk(p)).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
   const counts={};projs.forEach(p=>{const u=latestUpdate(p.id);const k=u&&u.status?STATUS[u.status]:"Sem status";counts[k]=(counts[k]||0)+1});
   lines.push("Visão geral: "+Object.entries(counts).map(([k,n])=>n+" "+k.toLowerCase()).join(" · "));
   projs.forEach(p=>{
